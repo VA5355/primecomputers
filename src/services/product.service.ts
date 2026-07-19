@@ -1,0 +1,489 @@
+// src/services/ProductService.ts
+import { ProductRepository } from "../repositories/product.repository.js";
+import { CategoryRepository } from "../repositories/category.repository.js";
+import { OrderRepository } from "../repositories/order.repository.js";
+import { UserRepository } from "../repositories/user.repository.js";
+import { CreateProductDto } from "../types/index.js";
+import slugify from "slugify";
+import fs from "fs";
+import path from "path";
+import braintree from "braintree";
+import dotenv from "dotenv";
+import { Logger } from "../utils/logger.js";
+
+dotenv.config();
+
+// Braintree Gateway Configuration
+const gateway = new braintree.BraintreeGateway({
+    environment: braintree.Environment.Sandbox, // Change to Production for live
+    merchantId: process.env.BRAINTREE_MERCHANT_ID!,
+    publicKey: process.env.BRAINTREE_PUBLIC_KEY!,
+    privateKey: process.env.BRAINTREE_PRIVATE_KEY!,
+});
+
+export interface ProductFilters {
+    categories?: string[];  // Now supports multiple categories
+    category?: string;      // Keep for backward compatibility
+    priceMin?: number;
+    priceMax?: number;
+    keyword?: string;
+}
+
+export interface ProductPhoto {
+    path: string;
+    size: number;
+    type: string;
+    name: string;
+}
+
+export class ProductService {
+    private productRepository: ProductRepository;
+    private categoryRepository: CategoryRepository;
+    private orderRepository: OrderRepository;
+    private logger: Logger;
+
+    constructor() {
+        this.productRepository = new ProductRepository();
+        this.categoryRepository = new CategoryRepository();
+        this.orderRepository = new OrderRepository();
+        this.logger = new Logger('ProductService');
+    }
+
+    // Business Logic: Create Product with Photo Upload
+    async createProduct(
+        productData: CreateProductDto & { [key: string]: any },
+        photo?: ProductPhoto
+    ): Promise<any> {
+        this.logger.methodEntry('createProduct', { name: productData.name, hasPhoto: !!photo });
+        const timer = this.logger.startTimer('Create Product');
+
+        const { name, description, price, categoryId, quantity, shipping } = productData;
+
+        // Business Logic: Validate product data
+        this.logger.debug('Validating product data', { name });
+        const validationError = this.validateProductData(productData);
+        if (validationError) {
+            this.logger.warn('Product validation failed', { name, error: validationError });
+            throw new Error(validationError);
+        }
+
+        // Business Logic: Validate category exists
+        this.logger.debug('Validating category', { categoryId });
+        const categoryExists = await this.categoryRepository.findById(categoryId);
+        if (!categoryExists) {
+            this.logger.error('Category not found', new Error('Category not found'), { categoryId });
+            throw new Error("Category not found");
+        }
+
+        // Business Logic: Generate unique slug
+        const baseSlug = slugify(name, { lower: true });
+        const slug = await this.generateUniqueSlug(baseSlug);
+        this.logger.debug('Generated unique slug', { name, slug });
+
+        // Business Logic: Handle photo upload
+        let photoPath: string | undefined;
+        let photoContentType: string | undefined;
+
+        if (photo) {
+            this.logger.debug('Processing photo upload', { size: photo.size, type: photo.type });
+            const photoValidation = this.validatePhoto(photo);
+            if (photoValidation) {
+                this.logger.warn('Photo validation failed', { error: photoValidation });
+                throw new Error(photoValidation);
+            }
+
+            const photoResult = await this.saveProductPhoto(photo, slug);
+            photoPath = photoResult.path;
+            photoContentType = photo.type;
+            this.logger.debug('Photo saved successfully', { path: photoPath });
+        }
+
+        // Business Logic: Get category for relation
+        this.logger.debug('Fetching category entity', { categoryId });
+        const categoryEntity = await this.categoryRepository.findById(categoryId);
+        if (!categoryEntity) {
+            this.logger.error('Category entity not found', new Error('Category not found'), { categoryId });
+            throw new Error("Category not found");
+        }
+
+        // Business Logic: Create product
+        this.logger.debug('Creating product in database', { name, slug, price, quantity });
+        const product = await this.productRepository.createProduct({
+            name: name.trim(),
+            slug,
+            description: description.trim(),
+            price: typeof price === 'string' ? parseFloat(price) : price,
+            quantity: typeof quantity === 'string' ? parseInt(quantity) : quantity,
+            shipping: typeof shipping === 'string' ? shipping === "true" : Boolean(shipping),
+            categoryId: categoryId,
+            category: categoryEntity,
+            sold: 0, // Default value
+            photoPath,
+            photoContentType,
+        });
+
+        this.logger.info('Product created successfully', { productId: product.id, name: product.name, slug: product.slug });
+        timer();
+        this.logger.methodExit('createProduct', { productId: product.id });
+
+        return product;
+    }
+
+    // Business Logic: Update Product
+    async updateProduct(
+        productId: string,
+        productData: Partial<CreateProductDto & { [key: string]: any }>,
+        photo?: ProductPhoto
+    ): Promise<any> {
+        this.logger.methodEntry('updateProduct', { productId, hasPhoto: !!photo, fields: Object.keys(productData) });
+        const timer = this.logger.startTimer('Update Product');
+
+        // Business Logic: Check if product exists
+        this.logger.debug('Checking if product exists', { productId });
+        const existingProduct = await this.productRepository.findById(productId);
+        if (!existingProduct) {
+            this.logger.error('Product not found for update', new Error('Product not found'), { productId });
+            throw new Error("Product not found");
+        }
+
+        // Business Logic: Validate updated data
+        if (Object.keys(productData).length > 0) {
+            this.logger.debug('Validating update data', { productId, fields: Object.keys(productData) });
+            const validationError = this.validateProductData(productData, false);
+            if (validationError) {
+                this.logger.warn('Update validation failed', { productId, error: validationError });
+                throw new Error(validationError);
+            }
+        }
+
+        // Business Logic: Handle slug regeneration if name changed
+        let slug = existingProduct.slug;
+        if (productData.name && productData.name !== existingProduct.name) {
+            this.logger.debug('Regenerating slug for name change', { oldName: existingProduct.name, newName: productData.name });
+            const baseSlug = slugify(productData.name, { lower: true });
+            slug = await this.generateUniqueSlug(baseSlug, productId);
+            this.logger.debug('New slug generated', { productId, slug });
+        }
+
+        // Business Logic: Handle photo update
+        let photoPath = existingProduct.photoPath;
+        let photoContentType = existingProduct.photoContentType;
+
+        if (photo) {
+            this.logger.debug('Processing photo update', { productId, size: photo.size, type: photo.type });
+            const photoValidation = this.validatePhoto(photo);
+            if (photoValidation) {
+                this.logger.warn('Photo validation failed during update', { productId, error: photoValidation });
+                throw new Error(photoValidation);
+            }
+
+            // Remove old photo
+            if (existingProduct.photoPath) {
+                this.logger.debug('Removing old photo', { productId, oldPath: existingProduct.photoPath });
+                await this.removeProductPhoto(existingProduct.photoPath);
+            }
+
+            // Save new photo
+            const photoResult = await this.saveProductPhoto(photo, slug);
+            photoPath = photoResult.path;
+            photoContentType = photo.type;
+        }
+
+        // Business Logic: Update product
+        const updateData = {
+            ...productData,
+            slug,
+            photoPath,
+            photoContentType,
+        };
+
+        return await this.productRepository.update(productId, updateData);
+    }
+
+    // Business Logic: Delete Product
+    async deleteProduct(productId: string): Promise<any> {
+        const product = await this.productRepository.findById(productId);
+        if (!product) {
+            throw new Error("Product not found");
+        }
+
+        // Business Logic: Remove photo file
+        if (product.photoPath) {
+            await this.removeProductPhoto(product.photoPath);
+        }
+
+        // Business Logic: Delete product
+        const deleted = await this.productRepository.delete(productId);
+        if (!deleted) {
+            throw new Error("Failed to delete product");
+        }
+
+        return product;
+    }
+
+    // Business Logic: Get All Products
+    async getAllProducts(): Promise<any[]> {
+        return await this.productRepository.findAllWithCategory();
+    }
+
+    // Business Logic: Get Product by Slug
+    async getProductBySlug(slug: string): Promise<any> {
+        const product = await this.productRepository.findBySlug(slug);
+        if (!product) {
+            throw new Error("Product not found");
+        }
+        return product;
+    }
+
+    // Business Logic: Get Product by ID
+    async getProductById(id: string): Promise<any> {
+        const product = await this.productRepository.findById(id);
+        if (!product) {
+            throw new Error("Product not found");
+        }
+        return product;
+    }
+
+    // Business Logic: Search Products with Filters
+    async searchProducts(
+        filters: ProductFilters,
+        page: number = 1,
+        limit: number = 10
+    ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
+        let products: any[] = [];
+
+        if (filters.keyword) {
+            products = await this.productRepository.searchByName(filters.keyword);
+        } else if (filters.categories && filters.categories.length > 0) {
+            // Handle multiple categories
+            products = await this.productRepository.findByCategories(filters.categories);
+        } else if (filters.category) {
+            // Backward compatibility for single category
+            products = await this.productRepository.findByCategory(filters.category);
+        } else {
+            const result = await this.productRepository.findWithPagination(page, limit);
+            return {
+                products: result.data,
+                total: result.total,
+                page: result.page,
+                limit: result.limit
+            };
+        }
+
+        // Business Logic: Apply price filters
+        if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
+            products = products.filter(product => {
+                const price = parseFloat(product.price);
+                if (filters.priceMin !== undefined && price < filters.priceMin) return false;
+                if (filters.priceMax !== undefined && price > filters.priceMax) return false;
+                return true;
+            });
+        }
+
+        // Business Logic: Pagination
+        const total = products.length;
+        const startIndex = (page - 1) * limit;
+        const paginatedProducts = products.slice(startIndex, startIndex + limit);
+
+        return {
+            products: paginatedProducts,
+            total,
+            page,
+            limit
+        };
+    }
+
+    // Business Logic: Get Products Count
+    async getProductsCount(): Promise<number> {
+        return await this.productRepository.count();
+    }
+
+    // Business Logic: Get Related Products
+    async getRelatedProducts(productId: string, categoryId: string, limit: number = 4): Promise<any[]> {
+        const relatedProducts = await this.productRepository.findByCategory(categoryId);
+        
+        // Business Logic: Exclude the current product and limit results
+        return relatedProducts
+            .filter(product => product.id !== productId)
+            .slice(0, limit);
+    }
+
+    // Business Logic: Get Braintree Token
+    async getBraintreeToken(): Promise<string> {
+        try {
+            const response = await gateway.clientToken.generate({});
+            return response.clientToken;
+        } catch (error) {
+            throw new Error("Failed to generate payment token");
+        }
+    }
+
+    // Business Logic: Process Payment and Create Order
+    async processPayment(
+        nonce: string,
+        cart: any[],
+        userId: string
+    ): Promise<{ order: any; transaction: any }> {
+        try {
+            // Business Logic: Calculate total amount
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            // Business Logic: Process Braintree payment
+            const result = await gateway.transaction.sale({
+                amount: total.toFixed(2),
+                paymentMethodNonce: nonce,
+                options: {
+                    submitForSettlement: true,
+                },
+            });
+
+            if (!result.success) {
+                throw new Error(result.message || "Payment failed");
+            }
+
+            // Business Logic: Create order (repository will handle relations)
+            const productIds = cart.map(item => item.id);
+            
+            // Get buyer for the order relation
+            const userRepository = new UserRepository();
+            const buyer = await userRepository.findById(userId);
+            
+            if (!buyer) {
+                throw new Error("User not found");
+            }
+            
+            const order = await this.orderRepository.createOrder(
+                {
+                    payment: result,
+                    buyer: buyer as any,
+                    buyerId: userId, // Add missing property
+                    status: "Processing" as any,
+                },
+                productIds
+            );
+
+            // Business Logic: Update product quantities
+            for (const item of cart) {
+                await this.productRepository.incrementSold(item.id, item.quantity);
+            }
+
+            // Business Logic: Send confirmation email (optional)
+            // await this.sendOrderConfirmationEmail(order, userEmail);
+
+            return {
+                order,
+                transaction: result.transaction,
+            };
+        } catch (error: any) {
+            throw new Error(`Payment processing failed: ${error.message}`);
+        }
+    }
+
+    // Private Business Logic: Photo Management
+    private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
+        // Ensure uploads directory exists
+        const uploadsDir = path.join(process.cwd(), "uploads", "products");
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+
+        // Generate unique filename
+        const timestamp = Date.now();
+        const extension = path.extname(photo.name || ".jpg");
+        const filename = `${slug}-${timestamp}${extension}`;
+        const filePath = path.join(uploadsDir, filename);
+
+        // Copy photo to uploads directory
+        fs.copyFileSync(photo.path, filePath);
+
+        return { path: `uploads/products/${filename}` };
+    }
+
+    private async removeProductPhoto(photoPath: string): Promise<void> {
+        try {
+            const fullPath = path.join(process.cwd(), photoPath);
+            if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+            }
+        } catch (error) {
+            console.log("Warning: Could not remove photo file:", error);
+        }
+    }
+
+    // Private Business Logic: Validation
+    private validateProductData(data: any, isCreate: boolean = true): string | null {
+        if (isCreate || data.name !== undefined) {
+            if (!data.name || !data.name.trim()) {
+                return "Product name is required";
+            }
+            if (data.name.trim().length > 160) {
+                return "Product name must be less than 160 characters";
+            }
+        }
+
+        if (isCreate || data.description !== undefined) {
+            if (!data.description || !data.description.trim()) {
+                return "Product description is required";
+            }
+            if (data.description.trim().length > 2000) {
+                return "Product description must be less than 2000 characters";
+            }
+        }
+
+        if (isCreate || data.price !== undefined) {
+            const price = parseFloat(data.price);
+            if (isNaN(price) || price <= 0) {
+                return "Valid price is required";
+            }
+            if (price > 999999.99) {
+                return "Price too high";
+            }
+        }
+
+        if (isCreate || data.quantity !== undefined) {
+            const quantity = parseInt(data.quantity);
+            if (isNaN(quantity) || quantity < 0) {
+                return "Valid quantity is required";
+            }
+        }
+
+        if (isCreate || data.categoryId !== undefined) {
+            if (!data.categoryId) {
+                return "Category is required";
+            }
+        }
+
+        return null;
+    }
+
+    private validatePhoto(photo: ProductPhoto): string | null {
+        if (!photo) return null;
+
+        if (photo.size > 1000000) {
+            return "Image should be less than 1MB in size";
+        }
+
+        const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+        if (!allowedTypes.includes(photo.type)) {
+            return "Only JPEG, PNG and GIF images are allowed";
+        }
+
+        return null;
+    }
+
+    private async generateUniqueSlug(baseSlug: string, excludeId?: string): Promise<string> {
+        let slug = baseSlug;
+        let counter = 1;
+
+        while (true) {
+            const existing = await this.productRepository.findBySlug(slug);
+            if (!existing || (excludeId && existing.id === excludeId)) {
+                break;
+            }
+            slug = `${baseSlug}-${counter}`;
+            counter++;
+        }
+
+        return slug;
+    }
+}
