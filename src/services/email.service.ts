@@ -22,8 +22,8 @@ export class EmailService {
     private senderName: string;
 
     constructor() {
-        this.senderEmail = process.env.BREVO_SENDER_EMAIL || 'noreply@shophub.com';
-        this.senderName = process.env.BREVO_SENDER_NAME || 'ShopHub';
+        this.senderEmail = process.env.BREVO_SENDER_EMAIL || 'noreply@primecomputernetwork.com';
+        this.senderName = process.env.BREVO_SENDER_NAME || 'Prime Computer Network';
 
         if (!process.env.BREVO_API_KEY && !process.env.EMAIL_API_KEY) {
             logger.warn('Brevo API key not configured. Email service will not work.');

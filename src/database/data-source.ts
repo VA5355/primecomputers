@@ -1,8 +1,18 @@
 // src/database/data-source.ts
 import "reflect-metadata";
-import { DataSource } from "typeorm";
+import { Collection, DataSource } from "typeorm";
 import dotenv from "dotenv";
 import { Logger } from "../utils/logger.js";
+//import { Order } from "@getbrevo/brevo";
+import {  Order } from "../entities/order.entity.js";
+import { Product } from "../entities/product.entity.js";
+import { User } from "../entities/user.entity.js";
+import { Category } from "../entities/category.entity.js";
+import { Newsletter } from "../entities/newsletter.entity.js";
+import { ProductView } from "../entities/product-view.entity.js";
+import { RazorOrder } from "../entities/razororder.entity.js";
+import { UserPreference } from "../entities/user-preference.entity.js";
+import { Wishlist } from "../entities/wishlist.entity.js";
 
 dotenv.config();
 
@@ -50,13 +60,18 @@ export const AppDataSource = new DataSource({
     logging: process.env.NODE_ENV === "development",
 
     // Entity and Migration paths
-    entities: ["dist/entities/**/*.js"], // Compiled JS for production
+   // entities: ["dist/entities/**/*.js"], // Compiled JS for production
+       // ✅ Explicit array of imported entity classes (Works seamlessly in dev & prod)
+    entities: [User, Order, Product, Category, Collection, Newsletter, ProductView, RazorOrder, UserPreference, Wishlist],
+
+    
     migrations: ["dist/migrations/**/*.js"],
     subscribers: ["dist/subscribers/**/*.js"],
 
     // Development paths (when using ts-node)
     ...(process.env.NODE_ENV === "development" && {
-        entities: ["src/entities/**/*.ts"],
+     //   entities: ["src/entities/**/*.ts"],
+      entities: [User, Order, Product, Category, Collection, Newsletter, ProductView, RazorOrder, UserPreference, Wishlist],
         migrations: ["src/migrations/**/*.ts"],
         subscribers: ["src/subscribers/**/*.ts"],
     }),

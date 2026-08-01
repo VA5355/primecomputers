@@ -93,7 +93,19 @@ export class ProductService {
             }
 
             const photoResult = await this.saveProductPhoto(photo, slug);
-            photoPath = photoResult.path;
+            console.log("photoResult  "+photoResult);
+            if(photoResult !== undefined){
+                  if(photoResult.path !== undefined){
+                     console.log("photoResult path "+photoResult.path);
+                      photoPath = photoResult.path;
+                  }
+            }
+            else {
+                 console.log("photo not saved to server path  " );
+                photoPath = photo.path;
+                     console.log("photo  path  set as  " +photoPath);
+            }
+           
             photoContentType = photo.type;
             this.logger.debug('Photo saved successfully', { path: photoPath });
         }
@@ -324,11 +336,15 @@ export class ProductService {
         cart: any[],
         userId: string
     ): Promise<{ order: any; transaction: any }> {
+         this.logger.methodEntry('processPayment', { nonce: nonce, cart: !!cart });
+        const timer = this.logger.startTimer('Start processPayment');
         try {
             // Business Logic: Calculate total amount
             const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
+            console.log()
             // Business Logic: Process Braintree payment
+             this.logger.debug('Processing cart ', { cart });
+             this.logger.debug('  cart total ', { total });
             const result = await gateway.transaction.sale({
                 amount: total.toFixed(2),
                 paymentMethodNonce: nonce,
@@ -336,7 +352,7 @@ export class ProductService {
                     submitForSettlement: true,
                 },
             });
-
+              this.logger.debug('  Processed result ', { result });
             if (!result.success) {
                 throw new Error(result.message || "Payment failed");
             }
@@ -361,7 +377,7 @@ export class ProductService {
                 },
                 productIds
             );
-
+                 this.logger.debug('  Processed order ', { order });
             // Business Logic: Update product quantities
             for (const item of cart) {
                 await this.productRepository.incrementSold(item.id, item.quantity);
@@ -369,7 +385,8 @@ export class ProductService {
 
             // Business Logic: Send confirmation email (optional)
             // await this.sendOrderConfirmationEmail(order, userEmail);
-
+             this.logger.debug('  Processed transaction ', { order ,
+                transaction: result.transaction});
             return {
                 order,
                 transaction: result.transaction,
@@ -380,7 +397,7 @@ export class ProductService {
     }
 
     // Private Business Logic: Photo Management
-    private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
+   /* private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
         // Ensure uploads directory exists
         const uploadsDir = path.join(process.cwd(), "uploads", "products");
         if (!fs.existsSync(uploadsDir)) {
@@ -397,7 +414,147 @@ export class ProductService {
         fs.copyFileSync(photo.path, filePath);
 
         return { path: `uploads/products/${filename}` };
+    }*/
+
+    // Private Business Logic: Photo Management  VERSION 1 
+ /*   private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
+    // 1. Ensure target directory inside 'public/uploads/products' exists
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "products");
+    if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
     }
+
+       const timestamp = Date.now();
+    const extension = path.extname(photo.name || ".jpg");
+    const filename = `${slug}-${timestamp}${extension}`;
+    const destinationPath = path.join(uploadsDir, filename);
+
+    // 2. Validate source file exists before operating on it
+    if (!photo.path || !fs.existsSync(photo.path)) {
+       //throw new Error(`Temp file from upload not found at path: ${photo.path}`);
+       // dont thrpw exceptipn as the file is uplaoded to the public/uploads/products by the name upload_524cdb6fd2f27f31443e0f6787be9f57.png
+       // just rename it as with slug passed in 
+         // 3. Generate unique filename
+  
+
+    // 4. Safely move/copy file across drives/folders
+    try {
+        // Preferred: Move the file directly from temp to public upload folder
+       // fs.renameSync(photo.path, destinationPath);
+         fs.copyFileSync(photo.path, destinationPath);
+    } catch (err: any) {
+        // Fallback for cross-partition or cross-drive moves (EXDEV error)
+        if (err.code === 'EXDEV') {
+            fs.copyFileSync(photo.path, destinationPath);
+            fs.unlinkSync(photo.path); // Clean up original temp file
+        } else {
+            throw err;
+        }
+    }
+
+    }
+  
+    // 5. Return relative web URL path suitable for static serving
+    return { path: `/uploads/products/${filename}` };
+    }
+ */  
+    // Private Business Logic: Photo Management     VERSION 2
+ /*   private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
+        // 1. Ensure target directory inside 'public/uploads/products' exists
+        const uploadsDir = path.join(process.cwd(), "public", "uploads", "products");
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+
+        // --- CRITICAL FIX: Resolve photo.path to an absolute file system path ---
+        const sourcePath = path.isAbsolute(photo.path)
+            ? photo.path
+            : path.join(process.cwd(), photo.path.startsWith('/') ? `public${photo.path}` : photo.path);
+
+        // 2. Validate source file exists at the absolute path
+        if (!sourcePath || !fs.existsSync(sourcePath)) {
+            throw new Error(`Temp file from upload not found at resolved 10.54 update path: ${sourcePath}`);
+        }
+
+        // 3. Generate unique filename
+        const timestamp = Date.now();
+        const extension = path.extname(photo.name || ".jpg");
+        const filename = `${slug}-${timestamp}${extension}`;
+        const destinationPath = path.join(uploadsDir, filename);
+
+        // 4. If source and destination are the same file, skip copying/renaming
+        if (sourcePath === destinationPath) {
+            return { path: `/uploads/products/${filename}` };
+        }
+
+        // 5. Safely move/copy file across drives/folders
+        try {
+            fs.renameSync(sourcePath, destinationPath);
+        } catch (err: any) {
+            if (err.code === 'EXDEV') {
+                fs.copyFileSync(sourcePath, destinationPath);
+                fs.unlinkSync(sourcePath); // Clean up original temp file
+            } else {
+                throw err;
+            }
+        }
+
+        // 6. Return relative web URL path suitable for static serving
+        return { path: `/uploads/products/${filename}` };
+    }
+
+    */
+   // Private Business Logic: Photo Management
+    private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
+    // 1. Ensure target directory inside 'public/uploads/products' exists
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "products");
+    if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // 2. Extract just the filename from photo.path (handles Windows & Linux path separators)
+    const rawFileName = path.basename(photo.path);
+
+    // 3. Construct absolute source path where express-formidable originally saved it
+    // Checks if formidable saved it inside public/uploads/products or system root
+    let sourcePath = path.resolve(process.cwd(), "public", "uploads", "products", rawFileName);
+
+    if (!fs.existsSync(sourcePath)) {
+        // Fallback: check if formidable saved it at root uploads/products/
+        sourcePath = path.resolve(process.cwd(), "uploads", "products", rawFileName);
+    }
+
+    // 4. Validate source file exists on disk
+    if (!fs.existsSync(sourcePath)) {
+        throw new Error(`Temp file from upload not found on disk at: ${sourcePath}`);
+    }
+
+    // 5. Generate unique destination filename
+    const timestamp = Date.now();
+    const extension = path.extname(photo.name || rawFileName || ".jpg");
+    const filename = `${slug}-${timestamp}${extension}`;
+    const destinationPath = path.join(uploadsDir, filename);
+
+    // 6. If source and destination are already identical, return path
+    if (sourcePath === destinationPath) {
+        return { path: `/uploads/products/${filename}` };
+    }
+
+    // 7. Safely move/copy file across drives/folders
+    try {
+        fs.renameSync(sourcePath, destinationPath);
+    } catch (err: any) {
+        if (err.code === 'EXDEV') {
+            fs.copyFileSync(sourcePath, destinationPath);
+            fs.unlinkSync(sourcePath); // Clean up original temp file
+        } else {
+            throw err;
+        }
+    }
+
+    // 8. Return relative web URL path suitable for static serving
+    return { path: `/uploads/products/${filename}` };
+   }
 
     private async removeProductPhoto(photoPath: string): Promise<void> {
         try {

@@ -6,9 +6,12 @@ import { User } from "../entities/user.entity.js";
 import { Category } from "../entities/category.entity.js";
 import { Product } from "../entities/product.entity.js";
 import { Order } from "../entities/order.entity.js";
+import { RazorOrder } from "../entities/razororder.entity.js";
 import { OrderStatus } from "../types/index.js";
 import bcrypt from "bcrypt";
 import slugify from "slugify";
+import { UserRepository } from "../repositories/user.repository.js";
+import { RazorPayRepository } from "../repositories/razorpay.repository.js";
 
 const logger = new Logger('SeedDatabase');
 
@@ -59,14 +62,14 @@ const cities = [
 const users = [
     {
         name: "Admin User",
-        email: "vinodsolanki@primecomputernetwork.com",
+        email: "admin@primecomputers.com",
         password: "admin123456",
         role: 1,
         address: "123 Admin Street, Admin City, AC 12345"
     },
     {
         name: "Store Manager",
-        email: "vinodsolanki@primecomputernetwork.com",
+        email: "manager@primecomputers.com",
         password: "manager123456",
         role: 1,
         address: "456 Manager Lane, Admin City, AC 12345"
@@ -276,7 +279,38 @@ const productTemplates = [
     { name: "Organic Coffee Beans 5lb", description: "Single origin arabica beans.", price: 79.99, quantity: 230, category: "Food & Beverages", shipping: true, sold: 156 },
     { name: "Japanese Green Tea Set", description: "Premium matcha and sencha.", price: 59.99, quantity: 150, category: "Food & Beverages", shipping: true, sold: 89 }
 ];
+  const getShortDayWithSeconds = () => {
+    /*
+        const options = { 
+      weekday: 'short',    // "Mon", "Tue", etc.
+      timeZone: 'Asia/Kolkata', 
+      hour12: false,       // Use true for 12-hour AM/PM format
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    };
 
+    const formatter = new Intl.DateTimeFormat('en-IN', options);
+     */
+        const options :any  = { 
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short', 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit',
+      hour12: false // Set to true for AM/PM format
+    };
+    const istDateTime = new Date().toLocaleString('en-IN', options);
+    console.log(istDateTime); 
+    // Output example: "Wed, 22 Jul 2026, 10:02:15"
+    let formatNoSpaceComa = istDateTime.replace(", ","_").replace(" ","_").trim();
+    console.log("ShortDayWithSeconds :: " + formatNoSpaceComa); 
+    return formatNoSpaceComa;
+
+  }
 async function seedDatabase() {
     try {
         logger.info('Starting database seeding process...');
@@ -296,28 +330,50 @@ async function seedDatabase() {
         logger.info('Seeding categories...');
         const savedCategories: Category[] = [];
         for (const categoryData of categories) {
-            const category = categoryRepository.create(categoryData);
-            const savedCategory = await categoryRepository.save(category);
-            savedCategories.push(savedCategory);
-            logger.info(`Created category: ${savedCategory.name}`);
+            const category = categoryRepository.findBy(categoryData);
+            const savedCategory =  (await category).length >0 ?  (await category)[0] : undefined; /// await categoryRepository.save(category);
+            if(savedCategory !==undefined){
+                   savedCategories.push(savedCategory);
+            logger.info(`Found category: ${savedCategory.name}`);
+            }
+            else {
+                 logger.info(`No Saved category for  ${categoryData.name}`);
+            }
         }
-        logger.info(`✅ Created ${savedCategories.length} categories`);
+        logger.info(`✅ Found ${savedCategories.length} categories`);
 
         // Seed Users
         logger.info('Seeding users...');
         const savedUsers: User[] = [];
         for (const userData of users) {
             const hashedPassword = await bcrypt.hash(userData.password, 10);
-            const user = userRepository.create({
+          /*  const user = userRepository.create({
                 ...userData,
                 password: hashedPassword
             });
-            const savedUser = await userRepository.save(user);
-            savedUsers.push(savedUser);
-            logger.info(`Created user: ${savedUser.email} (Role: ${savedUser.role === 1 ? 'Admin' : 'User'})`);
+            */
+           // user.email
+            //userData.email
+            //  let    customUserRep :UserRepository =   userRepository
+            const foundUser =  await   userRepository.findOneBy(  { email: userData.email }  );   //await userRepository.save(user);
+            let clearuser = foundUser  ;//.filter ( u => u.email === userData.email).at(0);
+          // const savedUser=  (await foundUser ).length >0 ?  (await foundUser)[0] : undefined; /// await categoryRepository.save(category);
+           const savedUser=  ( clearuser  ) !== undefined ?   clearuser  : undefined; /// await categoryRepository.save(category);
+            if(savedUser !==undefined && savedUser !==null){
+                  savedUsers.push(savedUser);
+              logger.info(`Found user: ${savedUser.email} (Role: ${savedUser.role === 1 ? 'Admin' : 'User'})`);
+            }
+            else {
+                  logger.info(`No Saved user for  ${userData.name}`);
+            }
         }
-        logger.info(`✅ Created ${savedUsers.length} users`);
+        logger.info(`✅ Found ${savedUsers.length} users`);
 
+           let customRepo =  new  UserRepository (); 
+            let custFoundUser = await customRepo.findByRole ( 0);
+
+
+         logger.info(`✅ Found through Custom User Repository  ${custFoundUser?.length} users`);
         // Seed Products
         logger.info('Seeding products...');
         const savedProducts: Product[] = [];
@@ -332,8 +388,10 @@ async function seedDatabase() {
             // Generate slug from product name
             const slug = slugify(productData.name, { lower: true, strict: true });
 
-            // Create product with category reference - Fixed TypeScript issue
-            const product = productRepository.create({
+            
+         
+            // Create product with category reference - Fixed TypeScript issue productRepository.create(
+            const product = {
                 name: productData.name,
                 slug: slug,
                 description: productData.description,
@@ -342,62 +400,175 @@ async function seedDatabase() {
                 categoryId: category.id,
                 shipping: productData.shipping,
                 sold: productData.sold
-            });
+            }
+         //);
+              const foundProduct =   productRepository.findBy(  product);   //await userRepository.save(user);
 
-            const savedProduct = await productRepository.save(product);
-            savedProducts.push(savedProduct);
-            logger.info(`Created product: ${savedProduct.name} in category ${category.name}`);
+           // const savedProduct = await productRepository.save(product);
+            const savedProduct = (await foundProduct ).length >0 ?  (await foundProduct)[0] : undefined; /// await categoryRepository.save(category);
+            if(savedProduct !==undefined){
+                 savedProducts.push(savedProduct);
+             // logger.info(`Found user: ${savedUser.email} (Role: ${savedUser.role === 1 ? 'Admin' : 'User'})`);
+                logger.info(`Found product: ${savedProduct.name} in category ${category.name}`);
+            }
+            else {
+                  logger.info(`No Saved product for  ${product.name}`);
+            }
+        //    savedProducts.push(savedProduct);
+          //  logger.info(`Created product: ${savedProduct.name} in category ${category.name}`);
         }
-        logger.info(`✅ Created ${savedProducts.length} products`);
+        logger.info(`✅ Found ${savedProducts.length} products`);
 
-        // Create sample orders (15-20 orders)
-        logger.info('Creating sample orders...');
-        const orderRepository = AppDataSource.getRepository(Order);
+        // Create sample razor pay orders (15-20 orders)
+        logger.info('Creating sample razor pay orders...');
+        const orderRepository = AppDataSource.getRepository(RazorOrder);
 
+         logger.info(`✅ Found ${savedUsers.length} users`);
+         logger.info(`✅ Found Using UserRepository with role = 0  ${custFoundUser.length} users`);
         // Create orders for non-admin users
-        const regularUsers = savedUsers.filter(u => u.role === 0);
-        let orderCount = 0;
+        let  regularUsers = savedUsers.filter(u => u.role === 0);
+        if(regularUsers.length <1){
+                 regularUsers = custFoundUser;
 
+        }
+        let orderCount = 0;
+          logger.info(`Found  regularUsers  : ${Math.min(20, regularUsers.length)}`);
+        // create RazorPayOrder Repo 
+            let razorRepo =  new  RazorPayRepository (); 
+       
+        /*  const razorOrder = await this.razorOrderRepository.createOrder({
+                    payment: result,
+                    buyer: buyer as any,
+                    buyerId: userId, // Add missing property
+                    status: "Processing" as any,
+                },
+                productIds);
+   async createOrder(
+             orderData: Omit<IOrder, 'id' | 'products' | 'createdAt' | 'updatedAt'>,
+             productIds: string[]
+         )*/
         for (let i = 0; i < Math.min(20, regularUsers.length); i++) {
             const user = regularUsers[i];
             const numProducts = Math.floor(Math.random() * 5) + 1; // 1-5 products per order
             const orderProducts = [];
-
+                let razorPayPrder =  "razorPayOrder_"+user.email+"_"+getShortDayWithSeconds();
             // Select random products
             for (let j = 0; j < numProducts; j++) {
                 const randomProduct = savedProducts[Math.floor(Math.random() * savedProducts.length)];
                 orderProducts.push(randomProduct);
             }
+            /**  */
+          if(razorRepo !==undefined){
+                // first set the delivery info 
+                let dummyDelivery = {
+                        fullName: user?.name || '',
+                        email: user?.email || '',
+                        phone:  '',
+                        address:user?.address || '',
+                        city: '',
+                        postalCode: '',
+                        country: 'United States'
+                 }
+                 
+                // create a sample cart 
+                /*
+                * Sample cart 
+                * [{"id":"55876c92-913c-4199-98ab-bca223a4f005","name":"Kate Spade Tote","slug":"kate-spade-tote",
+                * "description":"Large leather tote bag.","price":"358.99","quantity":20,"sold":15,
+                * "photoPath":"/uploads/products/kate-spade-tote-1757862445657.jpg","photoContentType":"image/jpeg",
+                * "shipping":true,"categoryId":"090be721-a44b-4090-bdfb-d4b487e85980","createdAt":"2026-07-18T00:45:26.437Z",
+                * "updatedAt":"2026-07-18T00:47:30.072Z","category":{"id":"090be721-a44b-4090-bdfb-d4b487e85980",
+                * "name":"Clothing & Accessories","slug":"clothing-accessories"}}]
+                * 
+                */
+              let cart = [{"id":"55876c92-913c-4199-98ab-bca223a4f005","name":"Kate Spade Tote","slug":"kate-spade-tote",
+               "description":"Large leather tote bag.","price":"358.99","quantity":20,"sold":15,
+                 "photoPath":"/uploads/products/kate-spade-tote-1757862445657.jpg","photoContentType":"image/jpeg",
+                "shipping":true,"categoryId":"090be721-a44b-4090-bdfb-d4b487e85980","createdAt":"2026-07-18T00:45:26.437Z",
+                 "updatedAt":"2026-07-18T00:47:30.072Z","category":{"id":"090be721-a44b-4090-bdfb-d4b487e85980",
+                 "name":"Clothing & Accessories","slug":"clothing-accessories"}}]      
 
-            const order = orderRepository.create({
-                products: orderProducts,
-                payment: { transaction_id: `PAY_${Date.now()}_${i}` },
-                buyer: user,
-                buyerId: user.id,
-                status: OrderStatus.NOT_PROCESSED
-            });
-
-            await orderRepository.save(order);
-            orderCount++;
-            logger.info(`Created order for user: ${user.email}`);
+              // Business Logic: Calculate total amount
+        const total = cart.reduce((sum, item) => sum + (parseFloat(item.price) *  item.quantity ), 0);
+        let dynamicNounce = '';
+        if(cart !==undefined && Array.isArray(cart)&& cart.length > 0){
+          for(let i =0 ; i < cart.length ; i++  ){
+            let firstCartElement =  cart[i]; 
+           // for(const  field  of Object.keys(firstCartElement) ){
+                for (const [key, value] of Object.entries(firstCartElement)) {
+                        console.log(`${key} ${value}`);
+               
+               // let cartEntries =       Object.entries(firstCartElement);
+                if (value !== undefined &&  key === 'slug') {
+                    dynamicNounce =dynamicNounce+ value  +","
+                }
+ 
+            }
+          }
+           logger.debug('  razorpay  Nounce for  razororder', { dynamicNounce });
         }
-        logger.info(`✅ Created ${orderCount} sample orders`);
+          let paymethodNounce = dynamicNounce !== '' ? dynamicNounce :  'RazorButton';
+                   const result = await Promise.resolve({
+                        amount: total.toFixed(2),
+                        paymentMethodNonce: paymethodNounce,
+                        options: {
+                            submitForSettlement: true,
+                        },
+                   });
+        // Business Logic: Create order (repository will handle relations)
+          const productIds = cart.map(item => item.id);    
+                      const razorOrder = await razorRepo.createOrder({
+                    payment: result,
+                    buyer: user as any,
+                    buyerId: user.id ,//userId, // Add missing property
+                    status: "Processing" as any,
+                },
+                productIds);
+            await razorRepo.save(razorOrder);
+               orderCount++;
+              logger.info(`Created razor pay order for user: ${user.email}`);
+           logger.info('RazorOrder created successfully', { razorOrderId: razorOrder.id, name: razorOrder.buyer, slug: razorOrder.payment });
+           //  timer();
+           logger.methodExit('createRazorOrder', { razorOrderId: razorOrder.id });
+           }
+
+
+         /*    regular order creation 
+         if (orderRepository !==undefined ) {
+            const order = orderRepository.create({
+                            products: orderProducts,
+                            payment: { transaction_id: `PAY_${Date.now()}_${i}` },
+                            buyer: user,
+                            buyerId: user.id,
+                            status: OrderStatus.NOT_PROCESSED
+                        });
+
+                        await orderRepository.save(order);
+                        orderCount++;
+                        logger.info(`Created razor pay order for user: ${user.email}`);
+                    }
+           else {
+                logger.info(` Repository for razor pay order not initialised `);
+           }
+                */
+        }
+        logger.info(`✅ Created ${orderCount} sample razor pay orders`);
 
         // Summary
         logger.info('=================================');
-        logger.info('🎉 Database Seeding Complete!');
+        logger.info('🎉 Database Seeding Razor Pay Orders Complete!');
         logger.info('=================================');
         logger.info(`📦 Categories: ${savedCategories.length}`);
         logger.info(`👥 Users: ${savedUsers.length} (2 Admins, ${savedUsers.length - 2} Regular Users)`);
         logger.info(`🛍️ Products: ${savedProducts.length}`);
-        logger.info(`📋 Orders: ${orderCount}`);
+        logger.info(`📋 Razor Pay Orders: ${orderCount}`);
         logger.info('=================================');
         logger.info('🔐 Admin Credentials:');
-        logger.info('📧 Email: vinodsolanki@primecomputernetwork.com');
+        logger.info('📧 Email: admin@primecomputers.com');
         logger.info('🔑 Password: admin123456');
         logger.info('=================================');
         logger.info('🔐 Manager Credentials:');
-        logger.info('📧 Email: vinodsolanki@primecomputernetwork.com');
+        logger.info('📧 Email: manager@primecomputers.com');
         logger.info('🔑 Password: manager123456');
         logger.info('=================================');
 

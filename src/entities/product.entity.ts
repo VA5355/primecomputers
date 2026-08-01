@@ -40,6 +40,12 @@ export class Product implements IProduct {
     @Column({ type: "int", default: 0 })
     sold: number;
 
+    // --- Base64 / Binary Image Storage ---
+    // Storing Base64 payload directly in PostgreSQL standard `text` column
+    @Column({ type: "text", nullable: true })
+    photoData?: string;
+
+
     // Industry Standard: File storage instead of BLOB
     @Column({ type: "varchar", nullable: true })
     photoPath?: string;

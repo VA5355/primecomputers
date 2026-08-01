@@ -4,13 +4,92 @@ import { ProductService, ProductPhoto } from "../services/product.service.js";
 import { OrderRepository } from "../repositories/order.repository.js";
 import { OrderStatus } from "../types/index.js";
 import { Logger } from "../utils/logger.js";
-
+// 1. Import the built-in Node.js path module here
+import path from "path";
 // Dependency Injection: Single service instance
 const productService = new ProductService();
 const orderRepository = new OrderRepository();
 const logger = new Logger('ProductController');
 
 export const create = async (req: Request, res: Response): Promise<void> => {
+    logger.methodEntry('create', {
+        name: (req.fields as any)?.name,
+        category: (req.fields as any)?.category,
+        hasPhoto: !!(req.files as any)?.photo
+    });
+    const timer = logger.startTimer('Create Product');
+
+    try {
+        const { name, description, price, category, quantity, shipping } = req.fields as any;
+        const { photo } = req.files as any;
+
+        logger.debug('Creating product', { name, price, category, quantity });
+         let relativePhotoPath: string | undefined;
+    // Controller Responsibility: Convert photo format if exists
+        let productPhoto: ProductPhoto | undefined;
+        if (photo && photo.path) {
+            ///let path = req.files.photo.path;
+            // Extracts just the uploaded filename from the full system path
+            const filename = path.basename(photo.path);
+            
+            // Constructs the relative path for serving over HTTP
+            relativePhotoPath = `/uploads/products/${filename}`;
+
+            productPhoto = {
+                // Construct relative URL path for the database
+                path: `/uploads/products/${filename}`, 
+                size: photo.size,
+                type: photo.type,
+                name: photo.name,
+            };
+            
+            logger.debug('Photo uploaded to public directory', { filename, size: photo.size });
+        }   
+        // Controller Responsibility: Basic validation
+        if (!name?.trim()) {
+            logger.warn('Product creation failed - name required');
+            res.json({ error: "Product name is required" });
+            return;
+        }
+
+       /* OLD code 
+        if (photo) {
+            productPhoto = {
+                path: photo.path,
+                size: photo.size,
+                type: photo.type,
+                name: photo.name,
+            };
+            logger.debug('Photo uploaded', { size: photo.size, type: photo.type });
+        }
+        */
+        // Controller Responsibility: Delegate to service
+        logger.debug('Calling product service to create', { name });
+        const product = await productService.createProduct(
+            {
+                name,
+                description,
+                price,
+                categoryId: category, // Map category -> categoryId
+                quantity,
+                shipping
+            },
+            productPhoto
+        );
+
+        logger.info('Product created successfully', { productId: product.id, name: product.name });
+        timer();
+
+        // Controller Responsibility: Return response
+        res.json(product);
+        logger.methodExit('create', { success: true, productId: product.id });
+    } catch (error: any) {
+        logger.error('Product creation failed', error, { name: (req.fields as any)?.name });
+        res.status(400).json({ error: error.message });
+        logger.methodExit('create', { success: false, error: error.message });
+    }
+};
+export const createFromJson = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('create', {
         name: (req.fields as any)?.name,
         category: (req.fields as any)?.category,
@@ -170,6 +249,35 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
+export const removeFromJson = async (req: Request, res: Response): Promise<void> => {
+    const { productId } = req.params;
+    logger.methodEntry('remove', { productId });
+    const timer = logger.startTimer('Delete Product');
+
+    try {
+        logger.debug('Deleting product', { productId });
+
+        // Controller Responsibility: Delegate to service
+        const removed = await productService.deleteProduct(productId);
+
+        logger.info('Product deleted successfully', { productId });
+        timer();
+      /*  extra not required as such  
+      if (!removed) {
+            res.status(404).json({ error: "Product not found" });
+            return;
+        }
+            */
+        // Controller Responsibility: Return response
+        res.json(removed);
+        logger.methodExit('remove', { success: true, productId });
+    } catch (error: any) {
+        logger.error('Product deletion failed', error, { productId });
+        res.status(400).json({ error: error.message });
+        logger.methodExit('remove', { success: false, error: error.message });
+    }
+};
+
 export const update = async (req: Request, res: Response): Promise<void> => {
     const { productId } = req.params;
     logger.methodEntry('update', {
@@ -224,7 +332,84 @@ export const update = async (req: Request, res: Response): Promise<void> => {
         logger.methodExit('update', { success: false, error: error.message });
     }
 };
+export const updateFromJson = async (req: Request, res: Response): Promise<void> => {
+    const { productId } = req.params;
+    logger.methodEntry('update', {
+        productId,
+        name: (req.fields as any)?.name,
+        hasPhoto: !!(req.files as any)?.photo
+    });
+    const timer = logger.startTimer('Update Product');
 
+    try {
+       const { name, description, price, category, quantity, shipping, photoData, photoContentType } = req.body;
+       // const { photo } = req.files as any;
+        // Build the update payload dynamically
+        const updateData: any = {
+            name,
+            description,
+            price,
+            categoryId: category,
+            quantity,
+            shipping
+        };
+
+        // ONLY update photo fields if a new Base64 string was provided by the frontend
+        if (photoData) {
+            updateData.photoData = photoData;
+            updateData.photoContentType = photoContentType;
+        }
+
+         const updatedProduct = await productService.updateProduct(productId, updateData);
+
+
+        logger.debug('Updating product', { productId, name, price, category });
+          timer();
+        if (!updatedProduct) {
+                    res.status(404).json({ error: "Product not found" });
+                    return;
+                }
+           res.json(updatedProduct);
+         logger.methodExit('update', { success: true, productId:  productId });
+        // Controller Responsibility: Convert photo format if exists
+       /* let productPhoto: ProductPhoto | undefined;
+        if (photo) {
+            productPhoto = {
+                path: photo.path,
+                size: photo.size,
+                type: photo.type,
+                name: photo.name,
+            };
+            logger.debug('New photo uploaded', { size: photo.size, type: photo.type });
+        }
+
+        // Controller Responsibility: Delegate to service
+        logger.debug('Calling product service to update', { productId });
+        const product = await productService.updateProduct(
+            productId,
+            {
+                name,
+                description,
+                price,
+                categoryId: category, // Map category -> categoryId
+                quantity,
+                shipping
+            },
+            productPhoto
+        ); */
+
+      //  logger.info('Product updated successfully', { productId: product.id, name: product.name });
+       /// timer();
+
+        // Controller Responsibility: Return response
+       // res.json(product);
+        //logger.methodExit('update', { success: true, productId: product.id });
+    } catch (error: any) {
+        logger.error('Product update failed', error, { productId });
+        res.status(400).json({ error: error.message });
+        logger.methodExit('update', { success: false, error: error.message });
+    }
+};
 export const filteredProducts = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('filteredProducts', req.body);
     const timer = logger.startTimer('Filter Products');

@@ -7,12 +7,15 @@ import { AppDataSource } from "./database/data-source.js";
 import path from "path";
 import authRoutes from "./routes/auth.router.js";
 import categoryRoutes from "./routes/category.router.js";
+import razorPayRoutes from "./routes/razorpay.router.js";
 import productRoutes from "./routes/product.router.js";
 import trendingRoutes from "./routes/trending.router.js";
 import recommendationRoutes from "./routes/recommendation.router.js";
 import collectionRoutes from "./routes/collection.router.js";
 import newsletterRoutes from "./routes/newsletter.router.js";
 import { Logger } from "./utils/logger.js";
+import fs from "node:fs";
+import https from 'https';
 
 
 dotenv.config();
@@ -98,6 +101,9 @@ const getCorsOrigins = () => {
     if (process.env.NODE_ENV === 'development') {
         origins.push('http://localhost:3000');
         origins.push('http://localhost:3001');
+        origins.push('https://crinkly-trustful-turret.ngrok-free.dev');
+          origins.push('https://primebackend-sz0b.onrender.com');
+           origins.push('https://primecomputernetwork.com');
     }
 
     // Add any additional allowed origins from env (comma-separated)
@@ -159,6 +165,10 @@ app.use((req, res, next) => {
     next();
 });
 
+app.route('/ping').get((req, res) => {
+  return res.send("pong");
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({
@@ -173,6 +183,8 @@ logger.info('Registering API routes');
 app.use('/api', authRoutes);
 app.use('/api', categoryRoutes);
 app.use('/api', productRoutes);
+app.use('/api', razorPayRoutes);
+
 app.use('/api', trendingRoutes);
 app.use('/api', recommendationRoutes);
 app.use('/api', collectionRoutes);
@@ -180,8 +192,10 @@ app.use('/api', newsletterRoutes);
 
 // Serve uploaded photos statically under /api
 app.use('/api/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
+// Serve files dynamically from public directory
+app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 logger.info('Static file serving configured', { path: '/api/uploads' });
-
+logger.info('Static file serving configured', { path: '/uploads' });
 // For Vercel deployment, export the app without starting the server
 // Only start the server if not in Vercel environment
 if (!process.env.VERCEL) {

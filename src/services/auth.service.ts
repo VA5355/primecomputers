@@ -1,6 +1,7 @@
 // src/services/AuthService.ts
 import { UserRepository } from "../repositories/user.repository.js";
 import { OrderRepository } from "../repositories/order.repository.js";
+import { RazorPayRepository} from "../repositories/razorpay.repository.js";
 import { hashPassword, comparePassword } from "../helpers/auth.helper.js";
 import {
     validateRegistrationData,
@@ -21,11 +22,13 @@ import { emailService } from "./email.service.js";
 export class AuthService {
     private userRepository: UserRepository;
     private orderRepository: OrderRepository;
+    private razorPayRepository: RazorPayRepository;
     private logger: Logger;
 
     constructor() {
         this.userRepository = new UserRepository();
         this.orderRepository = new OrderRepository();
+        this.razorPayRepository = new RazorPayRepository();
         this.logger = new Logger('AuthService');
     }
 
@@ -219,6 +222,20 @@ export class AuthService {
         this.logger.info('User orders retrieved', { userId, orderCount: orders.length });
         timer();
         this.logger.methodExit('getUserOrders', { userId, count: orders.length });
+
+        return orders;
+    }
+        // Business Logic: Get User Razor Pay Orders
+    async getUserRazorOrders(userId: string) {
+        this.logger.methodEntry('getUserRazorOrders', { userId });
+        const timer = this.logger.startTimer('Get User Razor Pay Orders');
+
+        this.logger.debug('Fetching razor pay orders for user', { userId });
+        const orders = await this.razorPayRepository.findByUser(userId);
+
+        this.logger.info('User  Razor Pay  orders retrieved', { userId, orderCount: orders.length });
+        timer();
+        this.logger.methodExit('getUserRazorOrders', { userId, count: orders.length });
 
         return orders;
     }
