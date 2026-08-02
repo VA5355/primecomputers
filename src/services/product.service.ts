@@ -3,6 +3,7 @@ import { ProductRepository } from "../repositories/product.repository.js";
 import { CategoryRepository } from "../repositories/category.repository.js";
 import { OrderRepository } from "../repositories/order.repository.js";
 import { UserRepository } from "../repositories/user.repository.js";
+import { CloudinaryWorkerService } from "../workers/cloudinaryWorker.js";
 import { CreateProductDto } from "../types/index.js";
 import slugify from "slugify";
 import fs from "fs";
@@ -12,6 +13,8 @@ import dotenv from "dotenv";
 import { Logger } from "../utils/logger.js";
 
 dotenv.config();
+
+const workerService = new CloudinaryWorkerService();
 
 // Braintree Gateway Configuration
 const gateway = new braintree.BraintreeGateway({
@@ -133,6 +136,14 @@ export class ProductService {
             photoPath,
             photoContentType,
         });
+
+            // 3. Dispatch background task to Cloudinary worker
+        workerService.enqueueUpload({
+        productId: product.id,
+        localRelativePath: photoPath!!,
+        slug: product.slug,
+        });
+
 
         this.logger.info('Product created successfully', { productId: product.id, name: product.name, slug: product.slug });
         timer();

@@ -2,6 +2,7 @@
 import { Request, Response } from "express";
 import { ProductService, ProductPhoto } from "../services/product.service.js";
 import { OrderRepository } from "../repositories/order.repository.js";
+import { CloudinaryWorkerService } from "../workers/cloudinaryWorker.js";
 import { OrderStatus } from "../types/index.js";
 import { Logger } from "../utils/logger.js";
 // 1. Import the built-in Node.js path module here
@@ -10,6 +11,8 @@ import path from "path";
 const productService = new ProductService();
 const orderRepository = new OrderRepository();
 const logger = new Logger('ProductController');
+const workerService = new CloudinaryWorkerService();
+
 
 export const create = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('create', {
