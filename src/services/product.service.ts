@@ -11,6 +11,9 @@ import path from "path";
 import braintree from "braintree";
 import dotenv from "dotenv";
 import { Logger } from "../utils/logger.js";
+import { Order } from "@getbrevo/brevo";
+import { photo } from "../controllers/product.controller.js";
+import { emailService } from "./email.service.js";
 
 dotenv.config();
 
@@ -395,7 +398,7 @@ export class ProductService {
             }
 
             // Business Logic: Send confirmation email (optional)
-            // await this.sendOrderConfirmationEmail(order, userEmail);
+            await this.sendOrderConfirmationEmail(order, buyer.email);
              this.logger.debug('  Processed transaction ', { order ,
                 transaction: result.transaction});
             return {
@@ -406,7 +409,52 @@ export class ProductService {
             throw new Error(`Payment processing failed: ${error.message}`);
         }
     }
+    /**
+     * Safely maps the TypeORM Order entity to the structure required by EmailService
+     * and triggers Brevo transaction email non-blocking.
+     * 
+     * @param order - The persisted TypeORM Order entity with buyer and products preloaded.
+     * @param userEmail - Optional override email address (falls back to order.buyer.email).
+     */
+    async   sendOrderConfirmationEmail(order:  any, userEmail?: string): Promise<void> {
+        const recipientEmail = userEmail || order?.email;
 
+        if (!recipientEmail) {
+            logger.warn("Skipped order confirmation email: Recipient email is missing.", { orderId: order.id });
+            return;
+        }
+
+        try {
+            // Calculate total amount from eager-loaded products or payment payload safely
+            const total = order?.amount || 
+                (order.products || []).reduce((acc:any, p:any) => acc + (Number(p.price) || 0) * (p.quantity || 1), 0);
+
+            // Map TypeORM entity into the payload expected by EmailService
+            const orderDetails = {
+                orderId: order.id,
+                total: total.toFixed(2),
+                products: (order.products || []).map((product: any) => ({
+                    name: product.name || "Product Item",
+                    quantity: product.quantity || 1,
+                    price: (Number(product.price) || 0).toFixed(2),
+                })),
+            };
+
+            // Dispatch email via Brevo Service
+            await emailService.sendOrderConfirmation(recipientEmail, orderDetails);
+
+            logger.info("Order confirmation email process finished", {
+                orderId: order.id,
+                to: recipientEmail,
+            });
+        } catch (error) {
+            // Log cleanly without throwing so payment/order completion is never broken
+            logger.error("Error occurred while sending order confirmation email", error as Error, {
+                orderId: order.id,
+                to: recipientEmail,
+            });
+        }
+    }
     // Private Business Logic: Photo Management
    /* private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
         // Ensure uploads directory exists

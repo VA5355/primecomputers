@@ -34,7 +34,8 @@
     "express-formidable": "^1.2.0",
     "jsonwebtoken": "^9.0.0",
     "morgan": "^1.10.0",
-    "pg": "^8.11.0",
+    "nodemailer": "^9.0.3",
+    "pg": "^8.22.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "razorpay": "^2.9.8",
@@ -43,7 +44,8 @@
     "slugify": "^1.6.5",
     "typeorm": "^0.3.0",
     "winston": "^3.17.0",
-    "winston-daily-rotate-file": "^5.0.0"
+    "winston-daily-rotate-file": "^5.0.0",
+    "xmlbuilder2": "^4.0.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.0",
@@ -54,6 +56,8 @@
     "@types/jsonwebtoken": "^9.0.0",
     "@types/morgan": "^1.9.0",
     "@types/node": "^20.19.14",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.20.4",
     "@types/puppeteer": "^5.4.7",
     "@types/winston": "^2.4.4",
     "nodemon": "^2.0.20",

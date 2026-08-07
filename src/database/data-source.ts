@@ -4,6 +4,7 @@ import { Collection, DataSource } from "typeorm";
 import dotenv from "dotenv";
 import { Logger } from "../utils/logger.js";
 //import { Order } from "@getbrevo/brevo";
+import { Event } from "../entities/event.entity.js"; // <--- Import your Event Entity
 import {  Order } from "../entities/order.entity.js";
 import { Product } from "../entities/product.entity.js";
 import { User } from "../entities/user.entity.js";
