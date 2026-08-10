@@ -12,6 +12,7 @@ import { Category } from "../entities/category.entity.js";
 import { Newsletter } from "../entities/newsletter.entity.js";
 import { ProductView } from "../entities/product-view.entity.js";
 import { RazorOrder } from "../entities/razororder.entity.js";
+import { BharatPeOrder} from "../entities/bharatpeorder.entity.js";
 import { UserPreference } from "../entities/user-preference.entity.js";
 import { Wishlist } from "../entities/wishlist.entity.js";
 
@@ -63,7 +64,7 @@ export const AppDataSource = new DataSource({
     // Entity and Migration paths
    // entities: ["dist/entities/**/*.js"], // Compiled JS for production
        // ✅ Explicit array of imported entity classes (Works seamlessly in dev & prod)
-    entities: [User, Order, Product, Category, Collection, Newsletter, ProductView, RazorOrder, UserPreference, Wishlist],
+    entities: [User, Order, Product, Category, Collection, Event, Newsletter, ProductView, RazorOrder,BharatPeOrder, UserPreference, Wishlist],
 
     
     migrations: ["dist/migrations/**/*.js"],
@@ -72,7 +73,7 @@ export const AppDataSource = new DataSource({
     // Development paths (when using ts-node)
     ...(process.env.NODE_ENV === "development" && {
      //   entities: ["src/entities/**/*.ts"],
-      entities: [User, Order, Product, Category, Collection, Newsletter, ProductView, RazorOrder, UserPreference, Wishlist],
+      entities: [User, Order, Product, Category, Collection, Event,Newsletter, ProductView, RazorOrder, BharatPeOrder,UserPreference, Wishlist],
         migrations: ["src/migrations/**/*.ts"],
         subscribers: ["src/subscribers/**/*.ts"],
     }),

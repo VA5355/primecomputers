@@ -8,6 +8,7 @@ import path from "path";
 import authRoutes from "./routes/auth.router.js";
 import categoryRoutes from "./routes/category.router.js";
 import razorPayRoutes from "./routes/razorpay.router.js";
+import bharatPeRoutes from "./routes/bharatpe.router.js";
 import productRoutes from "./routes/product.router.js";
 import trendingRoutes from "./routes/trending.router.js";
 import recommendationRoutes from "./routes/recommendation.router.js";
@@ -218,6 +219,7 @@ app.use('/api', authRoutes);
 app.use('/api', categoryRoutes);
 app.use('/api', productRoutes);
 app.use('/api', razorPayRoutes);
+app.use('/api', bharatPeRoutes);
 
 app.use('/api', trendingRoutes);
 app.use('/api', recommendationRoutes);
