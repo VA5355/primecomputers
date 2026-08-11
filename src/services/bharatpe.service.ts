@@ -24,7 +24,7 @@ export class BharatPeService {
         this.logger = new Logger('BharatPeService');
     }
 
-    async createBharatPeOrder(name: string, cart: any[], paymethodNonce: string, userId: string): Promise<any> {
+    async createBharatPeOrder(name: string,payload:any, cart: any[], paymethodNonce: string, userId: string): Promise<any> {
         this.logger.methodEntry('createBharatPeOrder', { name, userId });
         const timer = this.logger.startTimer('Create BharatPeOrder');
 
@@ -73,7 +73,8 @@ export class BharatPeService {
              // Business Logic: Calculate total amount
                     //    const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
                      //   note item.quantity is the total quantity in the Stock , so take the cartQuantity if not 1 
-                        const total = cart.reduce((sum, item) => sum + (item.price * (item.cartQuantity || 1)), 0);
+                        let total = cart.reduce((sum, item) => sum + (item.price * (item.cartQuantity || 1)), 0);
+                         total = payload?.amount  !==undefined  ? payload.amount : total;
                         // Business Logic: Create razorOrder
                         this.logger.debug('Creating razorOrder', { name: sanitizedName, slug });
                         // Business Logic: Process Razor payment

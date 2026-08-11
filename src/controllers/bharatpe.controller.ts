@@ -18,7 +18,12 @@ export const create = async (req: Request, res: Response): Promise<void> => {
         const { cart } =  req.body;
         const { deliveryInfo } =  req.body;
          let debReqBody = JSON.stringify( req.body)
+         let req_payload = req.body;
+         let clone_payload = Object.assign({}, req_payload);
+
         logger.debug(' request body ::  ', { debReqBody });
+        let strCloneReqBody = JSON.stringify(clone_payload)
+          logger.debug(' request body cloned  ::  ', { strCloneReqBody });
         let debName = JSON.stringify(name)
         logger.debug('Creating bharatPe name::  ', { debName });
          let debDeliveryInfo = JSON.stringify(deliveryInfo)
@@ -114,7 +119,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
             let paymethodNounce = dynamicNounce !== '' ? dynamicNounce :  'BharatPeButton';
             let str = Array.from({length: 10}, () => Math.floor(Math.random() * 10)).join('');
             let userId =   userIdGlobal ? userIdGlobal :(  dynamicUser !== ''? dynamicUser : 'user_'+str ) ;
-            const bharatPe = await bharatPeService.createBharatPeOrder(name ,cart,paymethodNounce  , userId  );
+            const bharatPe = await bharatPeService.createBharatPeOrder(name ,clone_payload, cart,paymethodNounce  , userId  );
              if(bharatPe !== undefined && bharatPe !==null){
                 logger.info('BharatPe created successfully', { bharatPeId: bharatPe?.id || '', name: bharatPe?.name || '' });
                             timer();
