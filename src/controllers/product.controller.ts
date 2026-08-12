@@ -1,6 +1,6 @@
 // src/controllers/product.controller.ts
 import { Request, Response } from "express";
-import { ProductService, ProductPhoto } from "../services/product.service.js";
+import { ProductService, ProductPhoto } from "../services/product.service";
 import { OrderRepository } from "../repositories/order.repository.js";
 import { CloudinaryWorkerService } from "../workers/cloudinaryWorker.js";
 import { OrderStatus } from "../types/index.js";

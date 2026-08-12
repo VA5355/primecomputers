@@ -7,6 +7,8 @@ import { Logger } from "../utils/logger.js";
 import { Event } from "../entities/event.entity.js"; // <--- Import your Event Entity
 import {  Order } from "../entities/order.entity.js";
 import { Product } from "../entities/product.entity.js";
+import { ProductItem } from "../entities/productitem.entity.js";
+import { ProductBarcode } from "../entities/productbarcode.entity.js";
 import { User } from "../entities/user.entity.js";
 import { Category } from "../entities/category.entity.js";
 import { Newsletter } from "../entities/newsletter.entity.js";
@@ -64,7 +66,7 @@ export const AppDataSource = new DataSource({
     // Entity and Migration paths
    // entities: ["dist/entities/**/*.js"], // Compiled JS for production
        // ✅ Explicit array of imported entity classes (Works seamlessly in dev & prod)
-    entities: [User, Order, Product, Category, Collection, Event, Newsletter, ProductView, RazorOrder,BharatPeOrder, UserPreference, Wishlist],
+    entities: [User, Order, Product, ProductBarcode , ProductItem, Category, Collection, Event, Newsletter, ProductView, RazorOrder,BharatPeOrder, UserPreference, Wishlist],
 
     
     migrations: ["dist/migrations/**/*.js"],
@@ -73,7 +75,7 @@ export const AppDataSource = new DataSource({
     // Development paths (when using ts-node)
     ...(process.env.NODE_ENV === "development" && {
      //   entities: ["src/entities/**/*.ts"],
-      entities: [User, Order, Product, Category, Collection, Event,Newsletter, ProductView, RazorOrder, BharatPeOrder,UserPreference, Wishlist],
+      entities: [User, Order, Product,ProductBarcode , ProductItem, Category, Collection, Event,Newsletter, ProductView, RazorOrder, BharatPeOrder,UserPreference, Wishlist],
         migrations: ["src/migrations/**/*.ts"],
         subscribers: ["src/subscribers/**/*.ts"],
     }),

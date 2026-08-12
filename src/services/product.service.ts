@@ -3,6 +3,8 @@ import { ProductRepository } from "../repositories/product.repository.js";
 import { CategoryRepository } from "../repositories/category.repository.js";
 import { OrderRepository } from "../repositories/order.repository.js";
 import { UserRepository } from "../repositories/user.repository.js";
+import { ProductItemRepository } from "../repositories/productitem.repository.js";
+import { AppDataSource } from "../database/data-source.js";
 import { CloudinaryWorkerService } from "../workers/cloudinaryWorker.js";
 import { CreateProductDto } from "../types/index.js";
 import slugify from "slugify";
@@ -46,28 +48,48 @@ export class ProductService {
     private productRepository: ProductRepository;
     private categoryRepository: CategoryRepository;
     private orderRepository: OrderRepository;
+    private productItemRepository: ProductItemRepository;
     private logger: Logger;
 
     constructor() {
         this.productRepository = new ProductRepository();
         this.categoryRepository = new CategoryRepository();
         this.orderRepository = new OrderRepository();
+        this.productItemRepository = new ProductItemRepository(AppDataSource);
         this.logger = new Logger('ProductService');
     }
 
-    // Business Logic: Create Product with Photo Upload
+    /**
+     * Business Logic: Create Product along with unique ProductItems (serials)
+     */
     async createProduct(
-        productData: CreateProductDto & { [key: string]: any },
+        productData: CreateProductDto & { serials?: string[] | string; [key: string]: any },
         photo?: ProductPhoto
     ): Promise<any> {
         this.logger.methodEntry('createProduct', { name: productData.name, hasPhoto: !!photo });
         const timer = this.logger.startTimer('Create Product');
 
-        const { name, description, price, categoryId, quantity, shipping } = productData;
+        // Parse serials from request payload
+        let serialList: string[] = [];
+        if (typeof productData.serials === 'string') {
+            try {
+                serialList = JSON.parse(productData.serials);
+            } catch {
+                serialList = [productData.serials];
+            }
+        } else if (Array.isArray(productData.serials)) {
+            serialList = productData.serials;
+        }
 
-        // Business Logic: Validate product data
-        this.logger.debug('Validating product data', { name });
-        const validationError = this.validateProductData(productData);
+        const { name, description, price, categoryId,quantity, shipping } = productData;
+
+        // Auto-sync quantity with scanned serials count if serials exist
+        const calculatedQuantity = serialList.length > 0 ? serialList.length : 
+        (typeof productData.quantity == "string"  ? parseInt(productData.quantity || 0) :productData.quantity || 0) ;
+         this.logger.debug('ProductService createProduct :: ', { name, description, price, categoryId,quantity, shipping });
+
+        // Validation
+        const validationError = this.validateProductData({ ...productData, quantity: calculatedQuantity });
         if (validationError) {
             this.logger.warn('Product validation failed', { name, error: validationError });
             throw new Error(validationError);
@@ -81,12 +103,11 @@ export class ProductService {
             throw new Error("Category not found");
         }
 
-        // Business Logic: Generate unique slug
+        // Generate Slug
         const baseSlug = slugify(name, { lower: true });
         const slug = await this.generateUniqueSlug(baseSlug);
         this.logger.debug('Generated unique slug', { name, slug });
-
-        // Business Logic: Handle photo upload
+        // Photo Handling
         let photoPath: string | undefined;
         let photoContentType: string | undefined;
 
@@ -116,53 +137,60 @@ export class ProductService {
             this.logger.debug('Photo saved successfully', { path: photoPath });
         }
 
-        // Business Logic: Get category for relation
-        this.logger.debug('Fetching category entity', { categoryId });
-        const categoryEntity = await this.categoryRepository.findById(categoryId);
-        if (!categoryEntity) {
-            this.logger.error('Category entity not found', new Error('Category not found'), { categoryId });
-            throw new Error("Category not found");
-        }
-
-        // Business Logic: Create product
-        this.logger.debug('Creating product in database', { name, slug, price, quantity });
-        const product = await this.productRepository.createProduct({
+        // Delegate transactional creation of Product + ProductItems
+        const { product } = await this.productItemRepository.createProductWithItems({
             name: name.trim(),
-            slug,
+             slug:  slug.trim(),
             description: description.trim(),
             price: typeof price === 'string' ? parseFloat(price) : price,
-            quantity: typeof quantity === 'string' ? parseInt(quantity) : quantity,
+             quantity: calculatedQuantity ,//typeof quantity === 'string' ? parseInt(quantity) : quantity,
+            categoryId,
+             photoPath:photoPath! || '' ,
+             category:categoryExists,
+             photoContentType: photoContentType! ||'',
             shipping: typeof shipping === 'string' ? shipping === "true" : Boolean(shipping),
-            categoryId: categoryId,
-            category: categoryEntity,
-            sold: 0, // Default value
-            photoPath,
-            photoContentType,
+            photoUrl: photoPath,
+            serials: serialList
         });
+         /**
+          name: string;
+            slug: string;
+            description: string;
+            price: number;
+            categoryId: string;
+                photoPath: string;
+                category: categoryEntity,
+                        photoContentType: string;
+            shipping: boolean;
+            photoUrl?: string;
+            serials: string[]; // Incoming array of scanned serial barcodes
+            }
+          */
+        // Enqueue background upload worker if photo exists
+        if (photoPath) {
+            workerService.enqueueUpload({
+                productId: product.id,
+                localRelativePath: photoPath,
+                slug: product.slug,
+            });
+        }
 
-            // 3. Dispatch background task to Cloudinary worker
-        workerService.enqueueUpload({
-        productId: product.id,
-        localRelativePath: photoPath!!,
-        slug: product.slug,
-        });
-
-
-        this.logger.info('Product created successfully', { productId: product.id, name: product.name, slug: product.slug });
+        this.logger.info('Product created with serial items', { productId: product.id, itemCount: serialList.length });
         timer();
         this.logger.methodExit('createProduct', { productId: product.id });
 
         return product;
     }
 
-    // Business Logic: Update Product
+    /**
+     * Business Logic: Update Product details and serial item inventory
+     */
     async updateProduct(
         productId: string,
-        productData: Partial<CreateProductDto & { [key: string]: any }>,
+        productData: Partial<CreateProductDto & { serials?: string[] | string; [key: string]: any }>,
         photo?: ProductPhoto
     ): Promise<any> {
-        this.logger.methodEntry('updateProduct', { productId, hasPhoto: !!photo, fields: Object.keys(productData) });
-        const timer = this.logger.startTimer('Update Product');
+        this.logger.methodEntry('updateProduct', { productId, hasPhoto: !!photo });
 
         // Business Logic: Check if product exists
         this.logger.debug('Checking if product exists', { productId });
@@ -172,7 +200,8 @@ export class ProductService {
             throw new Error("Product not found");
         }
 
-        // Business Logic: Validate updated data
+        
+        /* // Business Logic: Validate updated data
         if (Object.keys(productData).length > 0) {
             this.logger.debug('Validating update data', { productId, fields: Object.keys(productData) });
             const validationError = this.validateProductData(productData, false);
@@ -181,7 +210,7 @@ export class ProductService {
                 throw new Error(validationError);
             }
         }
-
+        */
         // Business Logic: Handle slug regeneration if name changed
         let slug = existingProduct.slug;
         if (productData.name && productData.name !== existingProduct.name) {
@@ -226,7 +255,9 @@ export class ProductService {
         return await this.productRepository.update(productId, updateData);
     }
 
-    // Business Logic: Delete Product
+    /**
+     * Business Logic: Delete Product (Cascades to remove ProductItems via TypeORM)
+     */
     async deleteProduct(productId: string): Promise<any> {
         const product = await this.productRepository.findById(productId);
         if (!product) {
@@ -269,8 +300,18 @@ export class ProductService {
         }
         return product;
     }
-
-    // Business Logic: Search Products with Filters
+      /**
+     * Business Logic: Scan/Lookup Product details by individual Item Serial Barcode
+     */
+    async getProductByBarcode(snBarcode: string): Promise<any> {
+        const item = await this.productItemRepository.findByBarcode(snBarcode);
+        if (!item) {
+            throw new Error(`No product item found with serial barcode: ${snBarcode}`);
+        }
+        return { item, product: item.product };
+    }
+   /* 
+   // Business Logic: Search Products with Filters
     async searchProducts(
         filters: ProductFilters,
         page: number = 1,
@@ -318,6 +359,58 @@ export class ProductService {
             limit
         };
     }
+    */ 
+     /**
+     * Business Logic: Search Products with Filters & Barcode Support
+     */
+    async searchProducts(
+        filters: ProductFilters,
+        page: number = 1,
+        limit: number = 10
+    ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
+        // Direct barcode lookup path
+        if (filters.snBarcode) {
+            const item = await this.productItemRepository.findByBarcode(filters.snBarcode);
+            const products = item && item.product ? [item.product] : [];
+            return { products, total: products.length, page: 1, limit };
+        }
+
+        let products: any[] = [];
+
+        if (filters.keyword) {
+            products = await this.productRepository.searchByName(filters.keyword);
+        } else if (filters.categories && filters.categories.length > 0) {
+            products = await this.productRepository.findByCategories(filters.categories);
+        } else if (filters.category) {
+            products = await this.productRepository.findByCategory(filters.category);
+        } else {
+            const result = await this.productRepository.findWithPagination(page, limit);
+            return {
+                products: result.data,
+                total: result.total,
+                page: result.page,
+                limit: result.limit
+            };
+        }
+
+        // Apply price filters
+        if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
+            products = products.filter(product => {
+                const price = parseFloat(product.price);
+                if (filters.priceMin !== undefined && price < filters.priceMin) return false;
+                if (filters.priceMax !== undefined && price > filters.priceMax) return false;
+                return true;
+            });
+        }
+
+        const total = products.length;
+        const startIndex = (page - 1) * limit;
+        const paginatedProducts = products.slice(startIndex, startIndex + limit);
+
+        return { products: paginatedProducts, total, page, limit };
+    }
+
+
 
     // Business Logic: Get Products Count
     async getProductsCount(): Promise<number> {

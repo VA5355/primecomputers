@@ -7,12 +7,15 @@ import {
     UpdateDateColumn,
     ManyToOne,
     ManyToMany,
+    OneToMany,
     JoinColumn,
     Index
 } from "typeorm";
 import { IProduct } from "../types/index.js";
 import { Category } from "./category.entity.js";
 import { Order } from "./order.entity.js";
+import { ProductItem } from "./productitem.entity.js";
+import { ProductBarcode } from "./productbarcode.entity.js";
 
 @Entity("products")
 @Index(["name"]) // For search performance
@@ -69,6 +72,16 @@ export class Product implements IProduct {
 
     @ManyToMany(() => Order, (order: Order) => order.products)
     orders?: Order[];
+
+    // --- NEW RELATIONS FOR INVENTORY TRACKING ---
+
+    // 1-to-Many: Multiple Product Barcodes (UPC/SKU) per Product
+    @OneToMany(() => ProductBarcode, (barcode) => barcode.product, { cascade: true })
+    barcodes: ProductBarcode[];
+
+    // 1-to-Many: Serialized Physical Items (Each SN = 1 stock quantity)
+    @OneToMany(() => ProductItem, (item) => item.product, { cascade: true })
+    items: ProductItem[];
 
     @CreateDateColumn({ type: "timestamp" })
     createdAt: Date;

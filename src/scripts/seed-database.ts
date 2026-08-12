@@ -4,7 +4,7 @@ import { AppDataSource } from "../database/data-source.js";
 import { Logger } from "../utils/logger.js";
 import { User } from "../entities/user.entity.js";
 import { Category } from "../entities/category.entity.js";
-import { Product } from "../entities/product.entity.js";
+import { Product } from "../entities/product.entity";
 import { Order } from "../entities/order.entity.js";
 import { OrderStatus } from "../types/index.js";
 import bcrypt from "bcrypt";

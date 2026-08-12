@@ -13,7 +13,7 @@ import {
 } from "typeorm";
 import { IOrder, OrderStatus } from "../types/index.js";
 import { User } from "./user.entity.js";
-import { Product } from "./product.entity.js";
+import { Product } from "./product.entity";
 
 @Entity("bharatpeorders")
 @Index(["buyerId"]) // For querying user orders

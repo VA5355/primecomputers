@@ -3,7 +3,7 @@ import { FindOptionsWhere , In} from "typeorm";
 import { BaseRepository } from "./base.repository.js";
 import { BharatPeOrder } from "../entities/bharatpeorder.entity.js";
 import { ICategory } from "../types/index.js";
-import { Product } from "../entities/product.entity.js";
+import { Product } from "../entities/product.entity";
 import { IOrder, OrderStatus } from "../types/index.js";
 
 //import { Category } from "../entities/category.entity.js";
