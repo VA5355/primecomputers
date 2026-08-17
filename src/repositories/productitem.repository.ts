@@ -15,7 +15,7 @@ export interface CreateProductWithSerialsDTO {
         
   shipping: boolean;
   photoUrl?: string;
-  serials: string[]; // Incoming array of scanned serial barcodes
+  serials: string[] | string; // Handle both arrays and comma-separated strings
 }
 /* reference
      name: name.trim(),
@@ -42,15 +42,35 @@ export class ProductItemRepository {
   }
 
   /**
+   * Helper to ensure serials is always a clean array of non-empty strings
+   */
+  private normalizeSerials(serials: string[] | string): string[] {
+    if (!serials) return [];
+    
+    // If sent as a comma-separated string from form-data/multiform
+    if (typeof serials === "string") {
+      return serials
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    }
+    
+    // If already an array
+    return serials.map((s) => s.trim()).filter((s) => s.length > 0);
+  }
+
+  /**
    * Creates a Product and bulk-inserts all scanned ProductItems in a single database transaction.
    */
   async createProductWithItems(dto: CreateProductWithSerialsDTO): Promise<{ product: Product; itemCount: number }> {
+    const cleanSerials = this.normalizeSerials(dto.serials);
+
     return await this.dataSource.transaction(async (transactionalEntityManager: EntityManager) => {
       // 1. Verify that none of the scanned serials already exist in DB
-      if (dto.serials.length > 0) {
+      if (cleanSerials.length > 0) {
         const existingItems = await transactionalEntityManager
           .createQueryBuilder(ProductItem, "item")
-          .where("item.snBarcode IN (:...serials)", { serials: dto.serials })
+          .where("item.snBarcode IN (:...serials)", { serials: cleanSerials })
           .getMany();
 
         if (existingItems.length > 0) {
@@ -58,7 +78,8 @@ export class ProductItemRepository {
           throw new Error(`Duplicate serial numbers found in database: ${duplicateSerials}`);
         }
       }
-      console.log("ProductItemRepository createProductWithItems :: scanned serials  "+dto.serials.length);
+
+      console.log(`ProductItemRepository :: Scanned serials count: ${cleanSerials.length}`);
 
       // 2. Instantiate and save the main Product record
       const newProduct = transactionalEntityManager.create(Product, {
@@ -78,22 +99,26 @@ export class ProductItemRepository {
 
       const savedProduct = await transactionalEntityManager.save(Product, newProduct);
 
-      // 3. Map serials array to ProductItem entities and bulk insert
-      if (dto.serials.length > 0) {
-        const productItems = dto.serials.map((serial) => {
-          return transactionalEntityManager.create(ProductItem, {
-            snBarcode: serial.trim(),
-            status: ItemStatus.AVAILABLE,
-            productId: savedProduct.id,
-          });
-        });
+      // 3. Bulk insert items using performant INSERT statement
+      if (cleanSerials.length > 0) {
+        const itemRecords = cleanSerials.map((serial) => ({
+          snBarcode: serial,
+          status: ItemStatus.AVAILABLE,
+          productId: savedProduct.id,
+        }));
 
-        await transactionalEntityManager.save(ProductItem, productItems);
+        // Using direct query builder insert avoids cascade & listener overhead
+        await transactionalEntityManager
+          .createQueryBuilder()
+          .insert()
+          .into(ProductItem)
+          .values(itemRecords)
+          .execute();
       }
 
       return {
         product: savedProduct,
-        itemCount: dto.serials.length,
+        itemCount: cleanSerials.length,
       };
     });
   }

@@ -12,20 +12,24 @@ export class ProductItem {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
-    @Index({ unique: true })
-    @Column({ type: "varchar", length: 100 })
-    snBarcode: string; // Serial Number Barcode per physical unit
+  @Index({ unique: true })
+  @Column({ name: "snBarcode", type: "varchar", length: 100 })
+  snBarcode: string;
 
-    @Column({ type: "enum", enum: ItemStatus, default: ItemStatus.AVAILABLE })
-    status: ItemStatus;
+  @Column({
+    type: "enum",
+    enum: ItemStatus,
+    default: ItemStatus.AVAILABLE,
+  })
+  status: ItemStatus;
 
-    @ManyToOne(() => Product, (product :any) => product.items, { onDelete: "CASCADE" })
-    @JoinColumn({ name: "product_id" })
-    product: Product;
+  @ManyToOne(() => Product, (product: any) => product.items, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "product_id" })
+  product: Product;
 
-    @Column({ name: "product_id", type: "uuid" })
-    productId: string;
+  @Column({ name: "product_id", type: "uuid" })
+  productId: string;
 
-    @CreateDateColumn({ type: "timestamp" })
-    createdAt: Date;
+  @CreateDateColumn({ name: "createdAt", type: "timestamp" })
+  createdAt: Date;
 }
