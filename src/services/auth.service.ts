@@ -210,6 +210,22 @@ export class AuthService {
             updatedAt: updated.updatedAt,
         };
     }
+    // Business Logic: Get User Order by id 
+    async getUserOrder(orderId: string) {
+        this.logger.methodEntry('getUserOrder', { orderId });
+        const timer = this.logger.startTimer('Get User Orders');
+
+        this.logger.debug('Fetching order for orderid ', { orderId });
+        const order = await  
+         this.orderRepository.findById(orderId) // this.orderRepository.findByUser(userId);
+
+        this.logger.info('Order retrieved', { order });
+        timer();
+        let jsonOrd = JSON.stringify(order)
+        this.logger.methodExit('getUserOrder', { jsonOrd });
+
+        return order;
+    }
 
     // Business Logic: Get User Orders
     async getUserOrders(userId: string) {

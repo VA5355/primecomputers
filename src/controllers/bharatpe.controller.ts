@@ -208,9 +208,10 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
     }
 };
 */
-export const getOrders = async (req: Request, res: Response): Promise<void> => {
+export const getOrder = async (req: Request, res: Response): Promise<void> => {
     const userId = (req as any).user.id;
     logger.methodEntry('getOrders', { userId });
+     const { orderId} = req.params;
     const timer = logger.startTimer('Fetch User Orders');
 
     try {
@@ -218,6 +219,34 @@ export const getOrders = async (req: Request, res: Response): Promise<void> => {
         logger.debug('Fetching user bharat pe orders', { userId });
        // const orders = await authService.getUserOrders(userId);
        // const orders = await authService.getUserOrders(userId);
+        //const orders = await authService.getUserOrders(userId);
+        const order = await authService.getUserOrder(orderId);
+         let jsOrder = JSON.stringify(order);
+        logger.info('User bharat pe orders fetched', { userId, orderjson: jsOrder });
+        timer();
+
+        // Controller Responsibility: Return response
+        res.json(order);
+        logger.methodExit('getOrders', { success: true, orderjson: jsOrder });
+    } catch (error: any) {
+        // Controller Responsibility: Error handling
+        logger.error('Failed to fetch  order by id ', error, { orderId });
+        res.status(500).json({ error: "Failed to fetch orders" });
+        logger.methodExit('getOrder', { success: false, error: error.message });
+    }
+};
+export const getOrders = async (req: Request, res: Response): Promise<void> => {
+    const userId = (req as any).user.id;
+    logger.methodEntry('getOrders', { userId });
+     const { orderId} = req.params;
+    const timer = logger.startTimer('Fetch User Orders');
+
+    try {
+        // Controller Responsibility: Delegate to service
+        logger.debug('Fetching user bharat pe orders', { userId });
+       // const orders = await authService.getUserOrders(userId);
+       // const orders = await authService.getUserOrders(userId);
+        //const orders = await authService.getUserOrders(userId);
         const orders = await authService.getUserOrders(userId);
 
         logger.info('User bharat pe orders fetched', { userId, orderCount: orders.length });
