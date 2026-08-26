@@ -210,24 +210,58 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
 */
 export const getOrder = async (req: Request, res: Response): Promise<void> => {
     const userId = (req as any).user.id;
-    logger.methodEntry('getOrders', { userId });
+   
      const { orderId} = req.params;
-    const timer = logger.startTimer('Fetch User Orders');
+      logger.methodEntry('getOrder', { userId , orderId});
+    const timer = logger.startTimer('Fetch User BharatPe getOrder');
 
     try {
         // Controller Responsibility: Delegate to service
-        logger.debug('Fetching user bharat pe orders', { userId });
+        logger.debug('Fetching  bharat pe orderId', { orderId });
+
        // const orders = await authService.getUserOrders(userId);
        // const orders = await authService.getUserOrders(userId);
         //const orders = await authService.getUserOrders(userId);
-        const order = await authService.getUserOrder(orderId);
+      //  const order = await authService.getUserOrder(orderId);
+        const order = await bharatPeService.getUserBharatPeOrder(orderId);
          let jsOrder = JSON.stringify(order);
-        logger.info('User bharat pe orders fetched', { userId, orderjson: jsOrder });
+        logger.info('User bharat pe getOrder fetched', { userId, orderjson: jsOrder });
         timer();
 
         // Controller Responsibility: Return response
         res.json(order);
-        logger.methodExit('getOrders', { success: true, orderjson: jsOrder });
+        logger.methodExit('getOrder', { success: true, orderjson: jsOrder });
+    } catch (error: any) {
+        // Controller Responsibility: Error handling
+        logger.error('Failed to fetch  order by id ', error, { orderId });
+        res.status(500).json({ error: "Failed to fetch orders" });
+        logger.methodExit('getOrder', { success: false, error: error.message });
+    }
+};
+export const getQRCodePayStatus = async (req: Request, res: Response): Promise<void> => {
+    const userId = (req as any).user.id;
+   
+     const { orderId} = req.params;
+     const { clientTxnId} = req.params;
+      logger.methodEntry('getQRCodePayStatus', { userId , orderId , clientTxnId});
+    const timer = logger.startTimer('Poll BharatPe getQRCodePayStatus ');
+
+    try {
+        // Controller Responsibility: Delegate to service
+        logger.debug('Polling  bharat pe client txn id ', { orderId });
+
+       // const orders = await authService.getUserOrders(userId);
+       // const orders = await authService.getUserOrders(userId);
+        //const orders = await authService.getUserOrders(userId);
+      //  const order = await authService.getUserOrder(orderId);
+        const order = await bharatPeService.getUserBharatPeQRPayStatus(orderId, clientTxnId);
+         let jsOrder = JSON.stringify(order);
+        logger.info('User bharat pe getOrder fetched', { userId, orderjson: jsOrder });
+        timer();
+
+        // Controller Responsibility: Return response
+        res.json(order);
+        logger.methodExit('getOrder', { success: true, orderjson: jsOrder });
     } catch (error: any) {
         // Controller Responsibility: Error handling
         logger.error('Failed to fetch  order by id ', error, { orderId });

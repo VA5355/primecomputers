@@ -5,6 +5,7 @@ import { BharatPeOrder } from "../entities/bharatpeorder.entity.js";
 import { ICategory } from "../types/index.js";
 import { Product } from "../entities/product.entity";
 import { IOrder, OrderStatus } from "../types/index.js";
+import { UUID } from "node:crypto";
 
 //import { Category } from "../entities/category.entity.js";
 
@@ -74,6 +75,31 @@ export class BharatPeRepository extends BaseRepository<BharatPeOrder> {
               order: { createdAt: "DESC" }
           });
       }
+       // Product-specific queries matching your Mongoose patterns
+    async findByPeOrdersId(orderId:string): Promise<BharatPeOrder []> {
+           const peOrder = await this.repository.manager
+              .getRepository(BharatPeOrder)
+              .findBy({ id: orderId });
+           if(peOrder !== undefined && peOrder !== null){
+             console.log(' found bharat pe orders'+JSON.stringify(peOrder));
+           } 
+           else {
+                console.log('  bharat pe order '+orderId +' NOT FOUND ' );
+           }    
+
+        let id = orderId;
+       return peOrder; /*this.find({  where: { id } ,
+              
+              order: { createdAt: "DESC" }
+          });*/
+       /* this.findOne({  where: { id } ,
+              
+              order: { createdAt: "DESC" }
+          });*/
+
+        // return this.repository.findOne({
+          //  where: { id :orderId }    });
+    }
   
       // Create order with products (many-to-many)
       async createOrder(
