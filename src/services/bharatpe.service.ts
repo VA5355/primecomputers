@@ -243,9 +243,9 @@ export class BharatPeService {
                         console.log("  Polling request    body "+ JSON.stringify(body));
                         console.log("   Polling request config  "+ JSON.stringify(config));
 
-                        /*const response =  await axios.post(
-                                `${baseUrl}/api/v1/check_order_status`,  body, config);*/
-                        const response =    await Promise.resolve({
+                        const response =  await axios.post(
+                                `${baseUrl}/api/v1/check_order_status`,  body, config);
+                        /*const response =    await Promise.resolve({
                                             "status": true,
                                             "msg": "Order found",
                                             "data": {
@@ -270,7 +270,7 @@ export class BharatPeService {
                                                 "created_at_unix": 1735381800
                                             }
                                         });
-                    
+                            */
                             if(response !==undefined && response !== null && response.data  !==undefined && response.data !== null){
                                     responseData =response.data
                             }
