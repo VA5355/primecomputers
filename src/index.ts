@@ -200,7 +200,8 @@ app.use((req, res, next) => {
 app.route('/ping').get((req, res) => {
   return res.send("pong");
 });
-
+// Health check endpoint for Render.com
+app.get('/health', (req, res) => res.status(200).send('OK'));
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({

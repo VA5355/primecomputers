@@ -35,6 +35,7 @@ export interface ProductFilters {
     priceMin?: number;
     priceMax?: number;
     keyword?: string;
+    snBarcode?: string; // Support filtering/lookup by Serial Barcode
 }
 
 export interface ProductPhoto {
@@ -62,11 +63,11 @@ export class ProductService {
     /**
      * Business Logic: Create Product along with unique ProductItems (serials)
      */
-    async createProduct(
+        async createProduct(
         productData: CreateProductDto & { serials?: string[] | string; [key: string]: any },
-        photo?: ProductPhoto
+        photos?: ProductPhoto[]
     ): Promise<any> {
-        this.logger.methodEntry('createProduct', { name: productData.name, hasPhoto: !!photo });
+        this.logger.methodEntry('createProduct', { name: productData.name, photoCount: photos?.length || 0 });
         const timer = this.logger.startTimer('Create Product');
 
         // Parse serials from request payload
@@ -81,12 +82,13 @@ export class ProductService {
             serialList = productData.serials;
         }
 
-        const { name, description, price, categoryId,quantity, shipping } = productData;
+        const { name, description, price, categoryId, quantity, shipping } = productData;
 
         // Auto-sync quantity with scanned serials count if serials exist
         const calculatedQuantity = serialList.length > 0 ? serialList.length : 
-        (typeof productData.quantity == "string"  ? parseInt(productData.quantity || 0) :productData.quantity || 0) ;
-         this.logger.debug('ProductService createProduct :: ', { name, description, price, categoryId,quantity, shipping });
+        (typeof productData.quantity == "string" ? parseInt(productData.quantity || '0') : productData.quantity || 0);
+        
+        this.logger.debug('ProductService createProduct :: ', { name, description, price, categoryId, quantity: calculatedQuantity, shipping });
 
         // Validation
         const validationError = this.validateProductData({ ...productData, quantity: calculatedQuantity });
@@ -111,63 +113,45 @@ export class ProductService {
         let photoPath: string | undefined;
         let photoContentType: string | undefined;
 
-        if (photo) {
-            this.logger.debug('Processing photo upload', { size: photo.size, type: photo.type });
-            const photoValidation = this.validatePhoto(photo);
-            if (photoValidation) {
-                this.logger.warn('Photo validation failed', { error: photoValidation });
-                throw new Error(photoValidation);
-            }
+        // Multiple Photo Handling
+        let savedPhotoPaths: string[] = [];
+        let primaryPhotoContentType: string | undefined;
 
-            const photoResult = await this.saveProductPhoto(photo, slug);
-            console.log("photoResult  "+photoResult);
-            if(photoResult !== undefined){
-                  if(photoResult.path !== undefined){
-                     console.log("photoResult path "+photoResult.path);
-                      photoPath = photoResult.path;
-                  }
-            }
-            else {
-                 console.log("photo not saved to server path  " );
-                photoPath = photo.path;
-                     console.log("photo  path  set as  " +photoPath);
+        if (photos && photos.length > 0) {
+            for (const photo of photos) {
+                const photoValidation = this.validatePhoto(photo);
+                if (photoValidation) throw new Error(photoValidation);
+
+                const photoResult = await this.saveProductPhoto(photo, slug);
+                savedPhotoPaths.push(photoResult.path);
+                primaryPhotoContentType = photo.type;
             }
            
-            photoContentType = photo.type;
-            this.logger.debug('Photo saved successfully', { path: photoPath });
         }
+
+        // Use the first image as the legacy/primary thumbnail path if your columns require it
+        const primaryPhotoPath = savedPhotoPaths.length > 0 ? savedPhotoPaths[0] : '';
 
         // Delegate transactional creation of Product + ProductItems
         const { product } = await this.productItemRepository.createProductWithItems({
             name: name.trim(),
-             slug:  slug.trim(),
+            slug: slug.trim(),
             description: description.trim(),
             price: typeof price === 'string' ? parseFloat(price) : price,
-             quantity: calculatedQuantity ,//typeof quantity === 'string' ? parseInt(quantity) : quantity,
+            quantity: calculatedQuantity,
             categoryId,
-             photoPath:photoPath! || '' ,
-             category:categoryExists,
-             photoContentType: photoContentType! ||'',
+            photoPath: primaryPhotoPath,
+            category: categoryExists,
+            photoContentType: primaryPhotoContentType || '',
             shipping: typeof shipping === 'string' ? shipping === "true" : Boolean(shipping),
-            photoUrl: photoPath,
-            serials: serialList
+            photoUrl: primaryPhotoPath,
+            serials: serialList,
+            // If you have a column or JSON field to save all paths, pass them here:
+            // extraPhotoPaths: savedPhotoPaths 
         });
-         /**
-          name: string;
-            slug: string;
-            description: string;
-            price: number;
-            categoryId: string;
-                photoPath: string;
-                category: categoryEntity,
-                        photoContentType: string;
-            shipping: boolean;
-            photoUrl?: string;
-            serials: string[]; // Incoming array of scanned serial barcodes
-            }
-          */
-        // Enqueue background upload worker if photo exists
-        if (photoPath) {
+
+        // Enqueue background upload workers for all saved photo paths
+        for (const photoPath of savedPhotoPaths) {
             workerService.enqueueUpload({
                 productId: product.id,
                 localRelativePath: photoPath,
@@ -175,7 +159,11 @@ export class ProductService {
             });
         }
 
-        this.logger.info('Product created with serial items', { productId: product.id, itemCount: serialList.length });
+        this.logger.info('Product created with serial items and multiple photos', { 
+            productId: product.id, 
+            itemCount: serialList.length,
+            photoCount: savedPhotoPaths.length 
+        });
         timer();
         this.logger.methodExit('createProduct', { productId: product.id });
 
@@ -200,18 +188,7 @@ export class ProductService {
             throw new Error("Product not found");
         }
 
-        
-        /* // Business Logic: Validate updated data
-        if (Object.keys(productData).length > 0) {
-            this.logger.debug('Validating update data', { productId, fields: Object.keys(productData) });
-            const validationError = this.validateProductData(productData, false);
-            if (validationError) {
-                this.logger.warn('Update validation failed', { productId, error: validationError });
-                throw new Error(validationError);
-            }
-        }
-        */
-        // Business Logic: Handle slug regeneration if name changed
+        // Handle slug updates if name changed
         let slug = existingProduct.slug;
         if (productData.name && productData.name !== existingProduct.name) {
             this.logger.debug('Regenerating slug for name change', { oldName: existingProduct.name, newName: productData.name });
@@ -220,17 +197,14 @@ export class ProductService {
             this.logger.debug('New slug generated', { productId, slug });
         }
 
-        // Business Logic: Handle photo update
+        // Photo Update logic
         let photoPath = existingProduct.photoPath;
         let photoContentType = existingProduct.photoContentType;
 
         if (photo) {
             this.logger.debug('Processing photo update', { productId, size: photo.size, type: photo.type });
             const photoValidation = this.validatePhoto(photo);
-            if (photoValidation) {
-                this.logger.warn('Photo validation failed during update', { productId, error: photoValidation });
-                throw new Error(photoValidation);
-            }
+            if (photoValidation) throw new Error(photoValidation);
 
             // Remove old photo
             if (existingProduct.photoPath) {
@@ -278,29 +252,19 @@ export class ProductService {
         return product;
     }
 
-    // Business Logic: Get All Products
-    async getAllProducts(): Promise<any[]> {
-        return await this.productRepository.findAllWithCategory();
-    }
-
-    // Business Logic: Get Product by Slug
-    async getProductBySlug(slug: string): Promise<any> {
-        const product = await this.productRepository.findBySlug(slug);
-        if (!product) {
-            throw new Error("Product not found");
-        }
-        return product;
-    }
-
-    // Business Logic: Get Product by ID
+    /**
+     * Business Logic: Get Product by ID with eager loaded available items
+     */
     async getProductById(id: string): Promise<any> {
         const product = await this.productRepository.findById(id);
         if (!product) {
             throw new Error("Product not found");
         }
-        return product;
+        const availableItems = await this.productItemRepository.findAvailableItemsByProductId(id);
+        return { ...product, items: availableItems };
     }
-      /**
+
+    /**
      * Business Logic: Scan/Lookup Product details by individual Item Serial Barcode
      */
     async getProductByBarcode(snBarcode: string): Promise<any> {
@@ -319,48 +283,7 @@ export class ProductService {
     ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
         let products: any[] = [];
 
-        if (filters.keyword) {
-            products = await this.productRepository.searchByName(filters.keyword);
-        } else if (filters.categories && filters.categories.length > 0) {
-            // Handle multiple categories
-            products = await this.productRepository.findByCategories(filters.categories);
-        } else if (filters.category) {
-            // Backward compatibility for single category
-            products = await this.productRepository.findByCategory(filters.category);
-        } else {
-            const result = await this.productRepository.findWithPagination(page, limit);
-            return {
-                products: result.data,
-                total: result.total,
-                page: result.page,
-                limit: result.limit
-            };
-        }
-
-        // Business Logic: Apply price filters
-        if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
-            products = products.filter(product => {
-                const price = parseFloat(product.price);
-                if (filters.priceMin !== undefined && price < filters.priceMin) return false;
-                if (filters.priceMax !== undefined && price > filters.priceMax) return false;
-                return true;
-            });
-        }
-
-        // Business Logic: Pagination
-        const total = products.length;
-        const startIndex = (page - 1) * limit;
-        const paginatedProducts = products.slice(startIndex, startIndex + limit);
-
-        return {
-            products: paginatedProducts,
-            total,
-            page,
-            limit
-        };
-    }
-    */ 
-     /**
+    /**
      * Business Logic: Search Products with Filters & Barcode Support
      */
     async searchProducts(
@@ -410,7 +333,15 @@ export class ProductService {
         return { products: paginatedProducts, total, page, limit };
     }
 
+    async getAllProducts(): Promise<any[]> {
+        return await this.productRepository.findAllWithCategory();
+    }
 
+    async getProductBySlug(slug: string): Promise<any> {
+        const product = await this.productRepository.findBySlug(slug);
+        if (!product) throw new Error("Product not found");
+        return product;
+    }
 
     // Business Logic: Get Products Count
     async getProductsCount(): Promise<number> {
@@ -420,11 +351,7 @@ export class ProductService {
     // Business Logic: Get Related Products
     async getRelatedProducts(productId: string, categoryId: string, limit: number = 4): Promise<any[]> {
         const relatedProducts = await this.productRepository.findByCategory(categoryId);
-        
-        // Business Logic: Exclude the current product and limit results
-        return relatedProducts
-            .filter(product => product.id !== productId)
-            .slice(0, limit);
+        return relatedProducts.filter(p => p.id !== productId).slice(0, limit);
     }
 
     // Business Logic: Get Braintree Token
@@ -432,19 +359,13 @@ export class ProductService {
         try {
             const response = await gateway.clientToken.generate({});
             return response.clientToken;
-        } catch (error) {
+        } catch {
             throw new Error("Failed to generate payment token");
         }
     }
 
-    // Business Logic: Process Payment and Create Order
-    async processPayment(
-        nonce: string,
-        cart: any[],
-        userId: string
-    ): Promise<{ order: any; transaction: any }> {
-         this.logger.methodEntry('processPayment', { nonce: nonce, cart: !!cart });
-        const timer = this.logger.startTimer('Start processPayment');
+    async processPayment(nonce: string, cart: any[], userId: string): Promise<{ order: any; transaction: any }> {
+        this.logger.methodEntry('processPayment', { nonce, cart: !!cart });
         try {
             // Business Logic: Calculate total amount
             const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -455,31 +376,28 @@ export class ProductService {
             const result = await gateway.transaction.sale({
                 amount: total.toFixed(2),
                 paymentMethodNonce: nonce,
-                options: {
-                    submitForSettlement: true,
-                },
+                options: { submitForSettlement: true },
             });
               this.logger.debug('  Processed result ', { result });
             if (!result.success) {
                 throw new Error(result.message || "Payment failed");
             }
 
-            // Business Logic: Create order (repository will handle relations)
+            if (!result.success) throw new Error(result.message || "Payment failed");
+
             const productIds = cart.map(item => item.id);
             
             // Get buyer for the order relation
             const userRepository = new UserRepository();
             const buyer = await userRepository.findById(userId);
-            
-            if (!buyer) {
-                throw new Error("User not found");
-            }
-            
+
+            if (!buyer) throw new Error("User not found");
+
             const order = await this.orderRepository.createOrder(
                 {
                     payment: result,
                     buyer: buyer as any,
-                    buyerId: userId, // Add missing property
+                    buyerId: userId,
                     status: "Processing" as any,
                 },
                 productIds
@@ -502,25 +420,15 @@ export class ProductService {
             throw new Error(`Payment processing failed: ${error.message}`);
         }
     }
-    /**
-     * Safely maps the TypeORM Order entity to the structure required by EmailService
-     * and triggers Brevo transaction email non-blocking.
-     * 
-     * @param order - The persisted TypeORM Order entity with buyer and products preloaded.
-     * @param userEmail - Optional override email address (falls back to order.buyer.email).
-     */
-    async   sendOrderConfirmationEmail(order:  any, userEmail?: string): Promise<void> {
-        const recipientEmail = userEmail || order?.email;
 
-        if (!recipientEmail) {
-            logger.warn("Skipped order confirmation email: Recipient email is missing.", { orderId: order.id });
-            return;
-        }
+    async sendOrderConfirmationEmail(order: any, userEmail?: string): Promise<void> {
+        const recipientEmail = userEmail || order?.email;
+        if (!recipientEmail) return;
 
         try {
             // Calculate total amount from eager-loaded products or payment payload safely
             const total = order?.amount || 
-                (order.products || []).reduce((acc:any, p:any) => acc + (Number(p.price) || 0) * (p.quantity || 1), 0);
+                (order.products || []).reduce((acc: any, p: any) => acc + (Number(p.price) || 0) * (p.quantity || 1), 0);
 
             // Map TypeORM entity into the payload expected by EmailService
             const orderDetails = {
@@ -657,63 +565,50 @@ export class ProductService {
 
     */
    // Private Business Logic: Photo Management
+     // Private Photo File Methods
     private async saveProductPhoto(photo: ProductPhoto, slug: string): Promise<{ path: string }> {
-    // 1. Ensure target directory inside 'public/uploads/products' exists
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "products");
-    if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-    }
+        const uploadsDir = path.join(process.cwd(), "public", "uploads", "products");
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
 
-    // 2. Extract just the filename from photo.path (handles Windows & Linux path separators)
-    const rawFileName = path.basename(photo.path);
+        const rawFileName = path.basename(photo.path);
+        let sourcePath = path.resolve(process.cwd(), "public", "uploads", "products", rawFileName);
 
-    // 3. Construct absolute source path where express-formidable originally saved it
-    // Checks if formidable saved it inside public/uploads/products or system root
-    let sourcePath = path.resolve(process.cwd(), "public", "uploads", "products", rawFileName);
+        if (!fs.existsSync(sourcePath)) {
+            sourcePath = path.resolve(process.cwd(), "uploads", "products", rawFileName);
+        }
 
-    if (!fs.existsSync(sourcePath)) {
-        // Fallback: check if formidable saved it at root uploads/products/
-        sourcePath = path.resolve(process.cwd(), "uploads", "products", rawFileName);
-    }
+        if (!fs.existsSync(sourcePath)) {
+            throw new Error(`Temp file from upload not found on disk at: ${sourcePath}`);
+        }
 
-    // 4. Validate source file exists on disk
-    if (!fs.existsSync(sourcePath)) {
-        throw new Error(`Temp file from upload not found on disk at: ${sourcePath}`);
-    }
+        const timestamp = Date.now();
+        const extension = path.extname(photo.name || rawFileName || ".jpg");
+        const filename = `${slug}-${timestamp}${extension}`;
+        const destinationPath = path.join(uploadsDir, filename);
 
-    // 5. Generate unique destination filename
-    const timestamp = Date.now();
-    const extension = path.extname(photo.name || rawFileName || ".jpg");
-    const filename = `${slug}-${timestamp}${extension}`;
-    const destinationPath = path.join(uploadsDir, filename);
+        if (sourcePath === destinationPath) {
+            return { path: `/uploads/products/${filename}` };
+        }
 
-    // 6. If source and destination are already identical, return path
-    if (sourcePath === destinationPath) {
+        try {
+            fs.renameSync(sourcePath, destinationPath);
+        } catch (err: any) {
+            if (err.code === 'EXDEV') {
+                fs.copyFileSync(sourcePath, destinationPath);
+                fs.unlinkSync(sourcePath);
+            } else {
+                throw err;
+            }
+        }
+
         return { path: `/uploads/products/${filename}` };
     }
-
-    // 7. Safely move/copy file across drives/folders
-    try {
-        fs.renameSync(sourcePath, destinationPath);
-    } catch (err: any) {
-        if (err.code === 'EXDEV') {
-            fs.copyFileSync(sourcePath, destinationPath);
-            fs.unlinkSync(sourcePath); // Clean up original temp file
-        } else {
-            throw err;
-        }
-    }
-
-    // 8. Return relative web URL path suitable for static serving
-    return { path: `/uploads/products/${filename}` };
-   }
-
     private async removeProductPhoto(photoPath: string): Promise<void> {
         try {
             const fullPath = path.join(process.cwd(), photoPath);
-            if (fs.existsSync(fullPath)) {
-                fs.unlinkSync(fullPath);
-            }
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
         } catch (error) {
             console.log("Warning: Could not remove photo file:", error);
         }
@@ -722,21 +617,12 @@ export class ProductService {
     // Private Business Logic: Validation
     private validateProductData(data: any, isCreate: boolean = true): string | null {
         if (isCreate || data.name !== undefined) {
-            if (!data.name || !data.name.trim()) {
-                return "Product name is required";
-            }
-            if (data.name.trim().length > 160) {
-                return "Product name must be less than 160 characters";
-            }
+            if (!data.name || !data.name.trim()) return "Product name is required";
+            if (data.name.trim().length > 160) return "Product name must be less than 160 characters";
         }
 
         if (isCreate || data.description !== undefined) {
-            if (!data.description || !data.description.trim()) {
-                return "Product description is required";
-            }
-            if (data.description.trim().length > 2000) {
-                return "Product description must be less than 2000 characters";
-            }
+            if (!data.description || !data.description.trim()) return "Product description is required";
         }
 
         if (isCreate || data.price !== undefined) {
@@ -767,16 +653,9 @@ export class ProductService {
 
     private validatePhoto(photo: ProductPhoto): string | null {
         if (!photo) return null;
-
-        if (photo.size > 1000000) {
-            return "Image should be less than 1MB in size";
-        }
-
+        if (photo.size > 1000000) return "Image should be less than 1MB in size";
         const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-        if (!allowedTypes.includes(photo.type)) {
-            return "Only JPEG, PNG and GIF images are allowed";
-        }
-
+        if (!allowedTypes.includes(photo.type)) return "Only JPEG, PNG and GIF images are allowed";
         return null;
     }
 
@@ -786,9 +665,7 @@ export class ProductService {
 
         while (true) {
             const existing = await this.productRepository.findBySlug(slug);
-            if (!existing || (excludeId && existing.id === excludeId)) {
-                break;
-            }
+            if (!existing || (excludeId && existing.id === excludeId)) break;
             slug = `${baseSlug}-${counter}`;
             counter++;
         }

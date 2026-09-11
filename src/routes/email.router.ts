@@ -8,7 +8,7 @@ import { requireSignin, isAdmin } from "../middlewares/auth.middleware.js";
 const router = Router();
 
 // Public routes
-router.post("/email/send-email", checkoutOrderConfirmation);
+router.post("/email/send-email/:orderId/:clientTxnId", checkoutOrderConfirmation);
 //router.get("/newsletter/unsubscribe/:token", unsubscribeNewsletter);
 
 // Admin routes

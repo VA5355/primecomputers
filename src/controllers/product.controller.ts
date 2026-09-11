@@ -18,40 +18,41 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('create', {
         name: (req.fields as any)?.name,
         category: (req.fields as any)?.category,
-        hasPhoto: !!(req.files as any)?.photo
+        hasPhotos: !!(req.files as any)?.photo
     });
     const timer = logger.startTimer('Create Product');
 
     try {
         const { name, description, price, category, quantity, shipping } = req.fields as any;
-        const { photo } = req.files as any;
+        const rawPhotos = (req.files as any)?.photo;
 
         logger.debug('Creating product', { name, price, category, quantity });
-         let relativePhotoPath: string | undefined;
-    // Controller Responsibility: Convert photo format if exists
-        let productPhoto: ProductPhoto | undefined;
-        if (photo && photo.path) {
-            ///let path = req.files.photo.path;
-            // Extracts just the uploaded filename from the full system path
-            const filename = path.basename(photo.path);
-            
-            // Constructs the relative path for serving over HTTP
-            relativePhotoPath = `/uploads/products/${filename}`;
+    
+        // Controller Responsibility: Normalize `photo` into an array of ProductPhoto objects
+        let productPhotos: ProductPhoto[] = [];
+        
+        if (rawPhotos) {
+            // Ensure rawPhotos is treated as an array (multipart libraries can return single object or array)
+            const photoArray = Array.isArray(rawPhotos) ? rawPhotos : [rawPhotos];
 
-            productPhoto = {
-                // Construct relative URL path for the database
-                path: `/uploads/products/${filename}`, 
-                size: photo.size,
-                type: photo.type,
-                name: photo.name,
-            };
-            
-            logger.debug('Photo uploaded to public directory', { filename, size: photo.size });
-        }   
+            for (const p of photoArray) {
+                if (p && p.path) {
+                    const filename = path.basename(p.path);
+                    productPhotos.push({
+                        path: `/uploads/products/${filename}`,
+                        size: p.size,
+                        type: p.type,
+                        name: p.name,
+                    });
+                }
+            }
+            logger.debug('Photos processed in controller', { count: productPhotos.length });
+        }
+
         // Controller Responsibility: Basic validation
         if (!name?.trim()) {
             logger.warn('Product creation failed - name required');
-            res.json({ error: "Product name is required" });
+            res.status(400).json({ error: "Product name is required" });
             return;
         }
 
@@ -73,18 +74,17 @@ export const create = async (req: Request, res: Response): Promise<void> => {
                 name,
                 description,
                 price,
-                categoryId: category, // Map category -> categoryId
+                categoryId: category,
                 quantity,
                 shipping
             },
-            productPhoto
+            productPhotos // Pass the array of photos instead of a single photo
         );
 
         logger.info('Product created successfully', { productId: product.id, name: product.name });
         timer();
 
-        // Controller Responsibility: Return response
-        res.json(product);
+        res.status(201).json(product);
         logger.methodExit('create', { success: true, productId: product.id });
     } catch (error: any) {
         logger.error('Product creation failed', error, { name: (req.fields as any)?.name });
@@ -113,15 +113,16 @@ export const createFromJson = async (req: Request, res: Response): Promise<void>
             return;
         }
 
-        // Controller Responsibility: Convert photo format if exists
-        let productPhoto: ProductPhoto | undefined;
+         // Controller Responsibility: Normalize `photo` into an array of ProductPhoto objects
+        let productPhoto: ProductPhoto[] = [];
         if (photo) {
-            productPhoto = {
+            let tempPhoto = {
                 path: photo.path,
                 size: photo.size,
                 type: photo.type,
                 name: photo.name,
             };
+            productPhoto.push(tempPhoto)
             logger.debug('Photo uploaded', { size: photo.size, type: photo.type });
         }
 

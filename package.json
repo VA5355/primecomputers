@@ -41,6 +41,7 @@
     "razorpay": "^2.9.8",
     "reflect-metadata": "^0.1.13",
     "sharp": "^0.34.3",
+    "sib-api-v3-sdk": "^8.5.0",
     "slugify": "^1.6.5",
     "typeorm": "^0.3.0",
     "winston": "^3.17.0",

@@ -249,12 +249,13 @@ export const getQRCodePayStatus = async (req: Request, res: Response): Promise<v
     try {
         // Controller Responsibility: Delegate to service
         logger.debug('Polling  bharat pe client txn id ', { orderId });
-
+       //            const userRepository = new UserRepository();
+        //    const buyer = await userRepository.findById(userId);
        // const orders = await authService.getUserOrders(userId);
        // const orders = await authService.getUserOrders(userId);
         //const orders = await authService.getUserOrders(userId);
       //  const order = await authService.getUserOrder(orderId);
-        const order = await bharatPeService.getUserBharatPeQRPayStatus(orderId, clientTxnId);
+        const order = await bharatPeService.getUserBharatPeQRPayStatus(orderId, clientTxnId, userId);
          let jsOrder = JSON.stringify(order);
         logger.info('User bharat pe getOrder fetched', { userId, orderjson: jsOrder });
         timer();

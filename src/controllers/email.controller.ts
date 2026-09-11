@@ -13,6 +13,61 @@ const productService = new ProductService();
 const orderRepository = new OrderRepository();
 const newsletterRepository = AppDataSource.getRepository(Newsletter);
 
+export const checkoutOrderConfirmationNews = async (req: Request, res: Response) => {
+    try {
+        const { email, name } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ error: "Email is required" });
+        }
+
+        // Check if already subscribed
+        const existingSubscription = await newsletterRepository.findOne({
+            where: { email }
+        });
+
+        if (existingSubscription) {
+            if (existingSubscription.active) {
+                return res.status(400).json({ error: "Email already subscribed" });
+            } else {
+                // Reactivate subscription
+                existingSubscription.active = true;
+                existingSubscription.name = name || existingSubscription.name;
+                await newsletterRepository.save(existingSubscription);
+
+                // Send reactivation email
+                await emailService.sendNewsletterConfirmation(email, name || existingSubscription.name);
+
+                return res.json({
+                    success: true,
+                    message: "Subscription reactivated successfully! Check your email for confirmation."
+                });
+            }
+        }
+
+        // Create new subscription
+        const unsubscribeToken = crypto.randomBytes(32).toString('hex');
+        const subscription = newsletterRepository.create({
+            email,
+            name,
+            unsubscribeToken,
+            active: true
+        });
+
+        await newsletterRepository.save(subscription);
+
+        // Send confirmation email
+        await emailService.sendNewsletterConfirmation(email, name);
+
+        res.status(201).json({
+            success: true,
+            message: "Successfully subscribed to newsletter! Check your email for confirmation."
+        });
+    } catch (error) {
+        logger.error('Error subscribing to newsletter', error as Error);
+        res.status(500).json({ error: "Failed to subscribe to newsletter" });
+    }
+};
 export const checkoutOrderConfirmation = async (req: Request, res: Response) => {
     try {
         const { email, name } = req.body;

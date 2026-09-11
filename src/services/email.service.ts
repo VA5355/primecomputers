@@ -32,6 +32,14 @@ export class EmailService {
 
     /**
      * Send order confirmation email
+     * 
+     * OrderDetails sample 
+    
+     * 
+     * 
+     * 
+     * 
+     * 
      */
     async sendOrderConfirmation(to: string, orderDetails: any): Promise<void> {
         try {
@@ -76,6 +84,488 @@ export class EmailService {
 
             await apiInstance.sendTransacEmail(sendSmtpEmail);
             logger.info('Order confirmation email sent', { to, orderId: orderDetails.orderId });
+        } catch (error) {
+            logger.error('Failed to send order confirmation email', error as Error, { to });
+            // Don't throw - email failure shouldn't break the order process
+        }
+    }
+    /**
+     * Send order confirmation email
+     * 
+     * OrderDetails sample 
+     * 
+     * 15:44:56 info:  QR PAYMENT  bharat pe getUserBharatPeOrder fetched {
+  "context": "BharatPeService",
+  "BHARATPEQR": "{\"id\":\"e14f325d-382c-4705-8f0b-c9162d177cd8\",\"payment\":{\"nonce\":\"BharatPeButton\",\"amount\":\"11.08\"},
+  \"buyerId\":\"b4017833-1ecf-433b-ab24-30f4ec02b8f2\",\"status\":\"Processing\",\"createdAt\":\"2026-09-01T04:44:31.669Z\",
+  \"updatedAt\":\"2026-09-01T04:44:31.669Z\",\"products\":[{\"id\":\"2e6d6ac6-e92d-45ad-a346-0932f36ab2eb\",\"name\":\"CALCIUM MAGNESIUM ZINC +\",
+  \"slug\":\"calcium-magnesium-zinc-+\",\"description\":\"Calcium carbamide, vitamin de +K2 mk7\",\"price\":\"1.00\",\"quantity\":1000,\"sold\":0,
+  \"photoData\":null,\"photoPath\":\"https://res.cloudinary.com/vrvjcdbh/image/upload/v1787548600/products/calcium-magnesium-zinc-%2B-2e6d6ac6-e92d-45ad-a346-0932f36ab2eb.jpg\",
+  \"photoContentType\":\"image/jpeg\",\"shipping\":true,\"categoryId\":\"be2bcd78-b744-4647-8442-90561a39706a\",
+  \"createdAt\":\"2026-08-23T23:46:39.753Z\",\"updatedAt\":\"2026-08-23T23:46:41.373Z\",
+  \"category\":{\"id\":\"be2bcd78-b744-4647-8442-90561a39706a\",\"name\":\"Food & Beverages\",\"slug\":\"food-beverages\"}}],
+  \"buyer\":{\"id\":\"b4017833-1ecf-433b-ab24-30f4ec02b8f2\",\"name\":\"George\",\"email\":\"glaubhanta@gmail.com\",
+  \"password\":\"$2b$12$yvL0FmySXYeUSnL6aPVA6utZoQ3EPKmh9513/fx2qKm03MqsfpFOK\",\"address\":null,\"role\":0,\"resetPasswordToken\":null,
+  \"resetPasswordExpires\":null,\"createdAt\":\"2026-07-20T00:27:45.501Z\",\"updatedAt\":\"2026-07-20T00:27:45.501Z\"}}"
+}
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
+     */
+    async sendBharatPeOrderConfirmation(to: string, orderDetails: any): Promise<void> {
+        try {
+            const sendSmtpEmail = new brevo.SendSmtpEmail();
+            if(sendSmtpEmail !==null && sendSmtpEmail !==undefined){ 
+
+
+           
+            sendSmtpEmail.sender = {
+                email: this.senderEmail,
+                name: this.senderName
+            };
+
+            sendSmtpEmail.to = [{
+                email: to
+            }];
+
+            //sendSmtpEmail.subject = `Order Confirmation - ${orderDetails.id}`;
+            sendSmtpEmail.subject = `Order Confirmation - `;
+
+           /* sendSmtpEmail.htmlContent = `
+                <h2>Thank you for your order!</h2>
+                <p>Your order #${orderDetails.id} has been confirmed.</p>
+                <h3>Order Details:</h3>
+                <ul>
+                    ${orderDetails.products.map((p: any) =>
+                        `<li>${p.name} - Quantity: ${p.quantity} - $${p.price}</li>
+                        <li><img src=${p.photoPath} alt=${p.name}/></li>
+                        `
+                    ).join('')}
+                </ul>
+
+                <p><strong>Total: $${orderDetails.amount}</strong></p>
+                <p>We'll send you another email when your order ships.</p>
+                <br>
+                <p>Best regards,<br>Prime Computer & Network Team</p>
+            `;*/
+            sendSmtpEmail.htmlContent = `
+                <h2>Thank you for your order!</h2>
+                <p>Your order   has been confirmed.</p>
+                <h3>Order Details:</h3>
+                <ul>
+                    
+                </ul>
+
+                <p><strong>Total:  </strong></p>
+                <p>We'll send you another email when your order ships.</p>
+                <br>
+                <p>Best regards,<br>Prime Computer & Network Team</p>
+            `;
+
+          /*  sendSmtpEmail.textContent = `
+                Thank you for your order!
+                Order #${orderDetails.id}
+                Total: $${orderDetails.amount}
+
+                We'll send you another email when your order ships.
+
+                Best regards,
+                Prime Computer & Network Team
+            `;*/
+            sendSmtpEmail.textContent = `
+                Thank you for your order!
+                Order #${orderDetails.id}
+                Total: $${orderDetails.amount}
+
+                We'll send you another email when your order ships.
+
+                Best regards,
+                Prime Computer & Network Team
+            `;
+            let textCont  = sendSmtpEmail.textContent;
+            let htmlContent  = sendSmtpEmail.htmlContent;
+            if(apiInstance !==null && apiInstance !== undefined){
+
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.textContent ', { textCont });
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent ', { htmlContent});
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent ', { htmlContent});
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent ', { htmlContent});
+                  
+
+                   await apiInstance.sendTransacEmail(sendSmtpEmail);
+            }
+            else {
+                 logger.info('Email SMTP Brevo  TransactionalEmailsApi NOT AVAILABLE ', { });
+            }
+          
+            logger.info('Order confirmation email sent', { to, orderId: orderDetails.id });
+             }
+         else {
+             // new brevo.SendSmtpEmail();
+             logger.info('Email SMTP Brevo NOT AVAILABLE ', { });
+
+         }
+
+
+        } catch (error) {
+            logger.error('Failed to send order confirmation email', error as Error, { to });
+            // Don't throw - email failure shouldn't break the order process
+        }
+    }
+
+     getShortDateTime  = () => {
+    const now = new Date();
+    const shortIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' });
+      console.log("shortIST "+shortIST); 
+    /*
+    const shortDateTime = now.toLocaleString('en-IN', { 
+      dateStyle: 'short', 
+      timeStyle: 'short' 
+    });
+    console.log(shortDateTime); */
+     return shortIST;
+  }
+    /**
+     * Send order confirmation email
+     * 
+     * OrderDetails sample 
+     * 
+     * 15:44:56 info:  QR PAYMENT  bharat pe getUserBharatPeOrder fetched {
+  "context": "BharatPeService",
+  "BHARATPEQR": "{\"id\":\"e14f325d-382c-4705-8f0b-c9162d177cd8\",\"payment\":{\"nonce\":\"BharatPeButton\",\"amount\":\"11.08\"},
+  \"buyerId\":\"b4017833-1ecf-433b-ab24-30f4ec02b8f2\",\"status\":\"Processing\",\"createdAt\":\"2026-09-01T04:44:31.669Z\",
+  \"updatedAt\":\"2026-09-01T04:44:31.669Z\",\"products\":[{\"id\":\"2e6d6ac6-e92d-45ad-a346-0932f36ab2eb\",\"name\":\"CALCIUM MAGNESIUM ZINC +\",
+  \"slug\":\"calcium-magnesium-zinc-+\",\"description\":\"Calcium carbamide, vitamin de +K2 mk7\",\"price\":\"1.00\",\"quantity\":1000,\"sold\":0,
+  \"photoData\":null,\"photoPath\":\"https://res.cloudinary.com/vrvjcdbh/image/upload/v1787548600/products/calcium-magnesium-zinc-%2B-2e6d6ac6-e92d-45ad-a346-0932f36ab2eb.jpg\",
+  \"photoContentType\":\"image/jpeg\",\"shipping\":true,\"categoryId\":\"be2bcd78-b744-4647-8442-90561a39706a\",
+  \"createdAt\":\"2026-08-23T23:46:39.753Z\",\"updatedAt\":\"2026-08-23T23:46:41.373Z\",
+  \"category\":{\"id\":\"be2bcd78-b744-4647-8442-90561a39706a\",\"name\":\"Food & Beverages\",\"slug\":\"food-beverages\"}}],
+  \"buyer\":{\"id\":\"b4017833-1ecf-433b-ab24-30f4ec02b8f2\",\"name\":\"George\",\"email\":\"glaubhanta@gmail.com\",
+  \"password\":\"$2b$12$yvL0FmySXYeUSnL6aPVA6utZoQ3EPKmh9513/fx2qKm03MqsfpFOK\",\"address\":null,\"role\":0,\"resetPasswordToken\":null,
+  \"resetPasswordExpires\":null,\"createdAt\":\"2026-07-20T00:27:45.501Z\",\"updatedAt\":\"2026-07-20T00:27:45.501Z\"}}"
+}
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
+     */
+    async sendBharatPeOrderConfirmationHTTP(to: string, orderDetails: any): Promise<void> {
+        try {
+            const sendSmtpEmail = new brevo.SendSmtpEmail();
+            if(sendSmtpEmail !==null && sendSmtpEmail !==undefined){ 
+
+
+           
+            sendSmtpEmail.sender = {
+                email: this.senderEmail,
+                name: this.senderName
+            };
+
+            sendSmtpEmail.to = [{
+                email: to
+            }];
+
+            //sendSmtpEmail.subject = `Order Confirmation - ${orderDetails.id}`;
+            sendSmtpEmail.subject = `Order Confirmation - `;
+
+          sendSmtpEmail.htmlContent = `
+                <h2>Thank you for your order!</h2>
+                <p>Your order #${orderDetails.id} has been confirmed.</p>
+                <h3>Order Details:</h3>
+                <ul>
+                    ${orderDetails.products.map((p: any) =>
+                        `<li>${p.name} - Quantity: ${p.quantity} - $${p.price}</li>
+                        <li><img src=${p.photoPath} alt=${p.name}/></li>
+                        `
+                    ).join('')}
+                </ul>
+
+                <p><strong>Total: $${orderDetails.amount}</strong></p>
+                <p>We'll send you another email when your order ships.</p>
+                <br>
+                <p>Best regards,<br>Prime Computer & Network Team</p>
+            `;
+            /*  sendSmtpEmail.htmlContent = `
+                <h2>Thank you for your order!</h2>
+                <p>Your order   has been confirmed.</p>
+                <h3>Order Details:</h3>
+                <ul>
+                    
+                </ul>
+
+                <p><strong>Total:  </strong></p>
+                <p>We'll send you another email when your order ships.</p>
+                <br>
+                <p>Best regards,<br>Prime Computer & Network Team</p>
+            `;
+            */
+          /*  sendSmtpEmail.textContent = `
+                Thank you for your order!
+                Order #${orderDetails.id}
+                Total: $${orderDetails.amount}
+
+                We'll send you another email when your order ships.
+
+                Best regards,
+                Prime Computer & Network Team
+            `;*/
+            sendSmtpEmail.textContent = `
+                Thank you for your order!
+                Order #${orderDetails.id}
+                Total: $${orderDetails.amount}
+
+                Your Order placed on #${this.getShortDateTime()}
+
+                Best regards,
+                Prime Computer & Network Team
+            `;
+            let textCont  = sendSmtpEmail.textContent;
+            let htmlContent  = sendSmtpEmail.htmlContent;
+            if(apiInstance !==null && apiInstance !== undefined){
+
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.textContent ', { textCont });
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent ', { htmlContent});
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent ', { htmlContent});
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent ', { htmlContent});
+                                        const response = await fetch(
+                            "https://api.brevo.com/v3/smtp/email",
+                            {
+                                method: "POST",
+
+                                headers: {
+                                    "accept": "application/json",
+                                    "api-key": process.env.BREVO_API_KEY!,
+                                    "content-type": "application/json"
+                                },
+
+                                body: JSON.stringify({
+                                    sender: {
+                                        name: "Prime Computer & Network",
+                                        email: "sales-man@storenotify.in"
+                                    },
+
+                                    to: [
+                                        {
+                                            email:to,
+                                            name: this.senderName
+                                        }
+                                    ],
+
+                                    subject: "Prime Computer Order Confirmation -",
+
+                                   /* htmlContent: `
+                                        <h1>Welcome!</h1>
+                                        <p>Thank you for registering.</p>
+                                    `*/
+                                    htmlContent: htmlContent
+                                })
+                            }
+                        );
+
+                        if (!response.ok) {
+                        logger.info(
+                                `Brevo API https://api.brevo.com/v3/smtp/email failed: ${response.status} ${await response.text()}`
+                            );
+                        }
+
+                    const result = await response.json();
+
+                    console.log(result);
+                         logger.info(
+                                `Brevo API https://api.brevo.com/v3/smtp/email  status : ${response.status} ${result}`
+                            );
+                  // await apiInstance.sendTransacEmail(sendSmtpEmail);
+            }
+            else {
+                 logger.info('Email SMTP Brevo  TransactionalEmailsApi NOT AVAILABLE ', { });
+            }
+          
+            logger.info('Order confirmation email sent', { to, orderId: orderDetails.id });
+             }
+         else {
+             // new brevo.SendSmtpEmail();
+             logger.info('Email SMTP Brevo NOT AVAILABLE ', { });
+
+         }
+
+
+        } catch (error) {
+            logger.error('Failed to send order confirmation email', error as Error, { to });
+            // Don't throw - email failure shouldn't break the order process
+        }
+    }
+    /**
+     * Send order confirmation email
+     * 
+     * OrderDetails sample 
+     * 
+     * 15:44:56 info:  QR PAYMENT  bharat pe getUserBharatPeOrder fetched {
+  "context": "BharatPeService",
+  "BHARATPEQR": "{\"id\":\"e14f325d-382c-4705-8f0b-c9162d177cd8\",\"payment\":{\"nonce\":\"BharatPeButton\",\"amount\":\"11.08\"},
+  \"buyerId\":\"b4017833-1ecf-433b-ab24-30f4ec02b8f2\",\"status\":\"Processing\",\"createdAt\":\"2026-09-01T04:44:31.669Z\",
+  \"updatedAt\":\"2026-09-01T04:44:31.669Z\",\"products\":[{\"id\":\"2e6d6ac6-e92d-45ad-a346-0932f36ab2eb\",\"name\":\"CALCIUM MAGNESIUM ZINC +\",
+  \"slug\":\"calcium-magnesium-zinc-+\",\"description\":\"Calcium carbamide, vitamin de +K2 mk7\",\"price\":\"1.00\",\"quantity\":1000,\"sold\":0,
+  \"photoData\":null,\"photoPath\":\"https://res.cloudinary.com/vrvjcdbh/image/upload/v1787548600/products/calcium-magnesium-zinc-%2B-2e6d6ac6-e92d-45ad-a346-0932f36ab2eb.jpg\",
+  \"photoContentType\":\"image/jpeg\",\"shipping\":true,\"categoryId\":\"be2bcd78-b744-4647-8442-90561a39706a\",
+  \"createdAt\":\"2026-08-23T23:46:39.753Z\",\"updatedAt\":\"2026-08-23T23:46:41.373Z\",
+  \"category\":{\"id\":\"be2bcd78-b744-4647-8442-90561a39706a\",\"name\":\"Food & Beverages\",\"slug\":\"food-beverages\"}}],
+  \"buyer\":{\"id\":\"b4017833-1ecf-433b-ab24-30f4ec02b8f2\",\"name\":\"George\",\"email\":\"glaubhanta@gmail.com\",
+  \"password\":\"$2b$12$yvL0FmySXYeUSnL6aPVA6utZoQ3EPKmh9513/fx2qKm03MqsfpFOK\",\"address\":null,\"role\":0,\"resetPasswordToken\":null,
+  \"resetPasswordExpires\":null,\"createdAt\":\"2026-07-20T00:27:45.501Z\",\"updatedAt\":\"2026-07-20T00:27:45.501Z\"}}"
+}
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
+     */
+    async sendStrBharatPeOrderConfirmationHTTP(to: string, orderDetails: any,strHtmlContent:any): Promise<void> {
+        try {
+            const sendSmtpEmail = new brevo.SendSmtpEmail();
+            if(sendSmtpEmail !==null && sendSmtpEmail !==undefined){ 
+
+
+           
+            sendSmtpEmail.sender = {
+                email: this.senderEmail,
+                name: this.senderName
+            };
+
+            sendSmtpEmail.to = [{
+                email: to
+            }];
+
+            //sendSmtpEmail.subject = `Order Confirmation - ${orderDetails.id}`;
+            sendSmtpEmail.subject = `Order Confirmation - `;
+
+          sendSmtpEmail.htmlContent = `
+                <h2>Thank you for your order!</h2>
+                <p>Your order #${orderDetails.id} has been confirmed.</p>
+                <h3>Order Details:</h3>
+                <ul>
+                    ${orderDetails.products.map((p: any) =>
+                        `<li>${p.name} - Quantity: ${p.quantity} - $${p.price}</li>
+                        <li><img src=${p.photoPath} alt=${p.name}/></li>
+                        `
+                    ).join('')}
+                </ul>
+
+                <p><strong>Total: $${orderDetails.amount}</strong></p>
+                <p>We'll send you another email when your order ships.</p>
+                <br>
+                <p>Best regards,<br>Prime Computer & Network Team</p>
+            `;
+            /*  sendSmtpEmail.htmlContent = `
+                <h2>Thank you for your order!</h2>
+                <p>Your order   has been confirmed.</p>
+                <h3>Order Details:</h3>
+                <ul>
+                    
+                </ul>
+
+                <p><strong>Total:  </strong></p>
+                <p>We'll send you another email when your order ships.</p>
+                <br>
+                <p>Best regards,<br>Prime Computer & Network Team</p>
+            `;
+            */
+          /*  sendSmtpEmail.textContent = `
+                Thank you for your order!
+                Order #${orderDetails.id}
+                Total: $${orderDetails.amount}
+
+                We'll send you another email when your order ships.
+
+                Best regards,
+                Prime Computer & Network Team
+            `;*/
+            sendSmtpEmail.textContent = `
+                Thank you for your order!
+                Order #${orderDetails.id}
+                Total: $${orderDetails.amount}
+
+                Your Order placed on #${this.getShortDateTime()}
+
+                Best regards,
+                Prime Computer & Network Team
+            `;
+            let textCont  = sendSmtpEmail.textContent;
+            let htmlContent  = strHtmlContent ; // sendSmtpEmail.htmlContent;
+            let smtpHtmlContent  =  sendSmtpEmail.htmlContent;
+            if(apiInstance !==null && apiInstance !== undefined){
+
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.textContent ', { textCont });
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent prepared ', { smtpHtmlContent});
+                     logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent passed in prepared  ', { htmlContent});
+                   //  logger.info('Email SMTP Brevo   sendSmtpEmail.htmlContent ', { htmlContent});
+                                        const response = await fetch(
+                            "https://api.brevo.com/v3/smtp/email",
+                            {
+                                method: "POST",
+
+                                headers: {
+                                    "accept": "application/json",
+                                    "api-key": process.env.BREVO_API_KEY!,
+                                    "content-type": "application/json"
+                                },
+
+                                body: JSON.stringify({
+                                    sender: {
+                                        name: "Prime Computer & Network",
+                                        email: "sales-man@storenotify.in"
+                                    },
+
+                                    to: [
+                                        {
+                                            email:to,
+                                            name: this.senderName
+                                        }
+                                    ],
+
+                                    subject: "Prime Computer Order Confirmation -",
+
+                                   /* htmlContent: `
+                                        <h1>Welcome!</h1>
+                                        <p>Thank you for registering.</p>
+                                    `*/
+                                    htmlContent: htmlContent
+                                })
+                            }
+                        );
+
+                        if (!response.ok) {
+                        logger.info(
+                                `Brevo API https://api.brevo.com/v3/smtp/email failed: ${response.status} ${await response.text()}`
+                            );
+                        }
+
+                    const result = await response.json();
+
+                    console.log(result);
+                         logger.info(
+                                `Brevo API https://api.brevo.com/v3/smtp/email  status : ${response.status} ${result}`
+                            );
+                  // await apiInstance.sendTransacEmail(sendSmtpEmail);
+            }
+            else {
+                 logger.info('Email SMTP Brevo  TransactionalEmailsApi NOT AVAILABLE ', { });
+            }
+          
+            logger.info('Order confirmation email sent', { to, orderId: orderDetails.id });
+             }
+         else {
+             // new brevo.SendSmtpEmail();
+             logger.info('Email SMTP Brevo NOT AVAILABLE ', { });
+
+         }
+
+
         } catch (error) {
             logger.error('Failed to send order confirmation email', error as Error, { to });
             // Don't throw - email failure shouldn't break the order process
