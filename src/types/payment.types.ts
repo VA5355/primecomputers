@@ -31,6 +31,8 @@ export interface GatewayPaymentResult {
 
     expiresAt?: Date;
 
+    upi_intent?: Record<string, string>;
+
     rawResponse?: unknown;
 }
 

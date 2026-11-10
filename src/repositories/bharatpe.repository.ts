@@ -6,6 +6,7 @@ import { ICategory } from "../types/index.js";
 import { Product } from "../entities/product.entity";
 import { IOrder, OrderStatus } from "../types/index.js";
 import { UUID } from "node:crypto";
+import { PaymentStatus } from "../types/payment-status.enum.js";
 
 //import { Category } from "../entities/category.entity.js";
 
@@ -100,7 +101,47 @@ export class BharatPeRepository extends BaseRepository<BharatPeOrder> {
         // return this.repository.findOne({
           //  where: { id :orderId }    });
     }
-  
+    async findBySupabaseOrderId(
+        supabaseOrderId: string
+    ): Promise<BharatPeOrder | null> {
+        return this.repository.findOne({
+            where: { supabaseOrderId },
+            relations: ["buyer", "products"]
+        });
+    }
+    async saveClientTxnId(
+    order: BharatPeOrder,
+    clientTxnId: string
+    ): Promise<BharatPeOrder> {
+        order.clientTxnId = clientTxnId;
+        return this.repository.save(order);
+    }
+    async saveGatewayPayment(
+        order: BharatPeOrder,
+        payment: {
+            clientTxnId: string;
+            gatewayOrderId: string;
+            paymentUrl?: string;
+            qrCode?: string;
+            upiString?: string;
+            expiresAt?: Date;
+            rawResponse?: unknown;
+        }
+    ): Promise<BharatPeOrder> {
+
+        order.clientTxnId = payment.clientTxnId;
+        order.gatewayOrderId = payment.gatewayOrderId;
+        order.paymentUrl = payment.paymentUrl;
+        order.qrCode = payment.qrCode;
+        order.upiString = payment.upiString;
+        order.paymentExpiresAt = payment.expiresAt;
+
+        order.paymentStatus = PaymentStatus.PENDING;
+
+        order.gatewayResponse = payment.rawResponse;
+
+        return this.repository.save(order);
+    }
       // Create order with products (many-to-many)
       async createOrder(
           orderData: Omit<IOrder, 'id' | 'products' | 'createdAt' | 'updatedAt'>,

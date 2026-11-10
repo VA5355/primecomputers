@@ -98,10 +98,11 @@ interface VyaparCreateResponse {
         currency?: string;
         status?: string;
 
-        payment_url?: string;
+         payment_url?: string;
         qr_code?: string;
         upi_string?: string;
         expires_at?: string;
+        upi_intent?: Record<string, string>;
     };
 }
 

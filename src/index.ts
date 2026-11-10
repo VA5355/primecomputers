@@ -9,7 +9,7 @@ import authRoutes from "./routes/auth.router.js";
 import categoryRoutes from "./routes/category.router.js";
 import razorPayRoutes from "./routes/razorpay.router.js";
 import bharatPeRoutes from "./routes/bharatpe.router.js";
-
+import phonepeRoutes from "./routes/payment.routes.js";
 import supabaseOrderRoutes from "./routes/supabase-order.routes.js";
 
 import productRoutes from "./routes/product.router.js";
@@ -228,6 +228,10 @@ app.use('/api', bharatPeRoutes);
 
 app.use('/api', supabaseOrderRoutes );
 
+app.use(
+    "/api/supabase-orders",
+    phonepeRoutes
+);
 
 app.use('/api', trendingRoutes);
 app.use('/api', recommendationRoutes);
