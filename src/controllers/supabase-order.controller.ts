@@ -1,19 +1,64 @@
 import { Request, Response } from "express";
 
 import { SupabaseOrderService } from "../services/supabase-order.service.js";
-
+import type {
+    SupabaseAuthenticatedRequest
+} from "../middlewares/require-supabase-signin.middleware.js";
+import { supabaseAdmin } from "../config/supabase.js";
 export class SupabaseOrderController {
 
     private service = new SupabaseOrderService();
 
     async syncFlutterOrder(
-        req: Request,
+        req: SupabaseAuthenticatedRequest,
         res: Response
     ): Promise<void> {
 
         try {
 
             const supabaseOrderId = req.params.supabaseOrderId;
+             const authenticatedUser = req.supabaseUser;
+                if (!authenticatedUser?.id) {
+            res.status(401).json({
+                success: false,
+                message: "Authentication required."
+            });
+            return;
+        }
+            const requestUserId = req.body?.user_id;
+              if (!requestUserId) {
+                res.status(400).json({
+                    success: false,
+                    message: "Supabase user_id is required."
+                });
+            return;
+            }
+           if (requestUserId !== authenticatedUser.id) {
+            res.status(403).json({
+                success: false,
+                message: "Supplied user_id does not match authenticated user."
+            });
+            return;
+             }
+
+               // Continue with the authoritative Supabase order lookup.
+                const { data: supabaseOrder, error } = await supabaseAdmin
+                    .from("orders")
+                    .select("*")
+                    .eq("id", supabaseOrderId)
+                    .eq("user_id", authenticatedUser.id)
+                    .maybeSingle();
+
+                if (error) {
+                    throw error;
+                }
+                if (!supabaseOrder) {
+                    res.status(404).json({
+                        success: false,
+                        message: "Order not found or does not belong to this customer."
+                    });
+                    return;
+                }
 
             const authorization = req.headers.authorization;
 
@@ -31,6 +76,13 @@ export class SupabaseOrderController {
                 supabaseOrderId,
                 accessToken
             );
+            if ( result.order.supabaseUserId !== authenticatedUser.id) {
+                res.status(403).json({
+                    success: false,
+                    message: "You are not authorized to synchronize this order."
+                });
+                return;
+            }
 
             res.status(result.created ? 201 : 200).json({
 
