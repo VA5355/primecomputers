@@ -16,6 +16,9 @@ import { Category } from "./category.entity.js";
 import { Order } from "./order.entity.js";
 import { ProductItem } from "./productitem.entity.js";
 import { ProductBarcode } from "./productbarcode.entity.js";
+// for SUPABASE FLUTTER ORDERS eASY MOVE to NEON TECH ORDERS 
+import { BharatPeOrder } from "./bharatpeorder.entity.js";
+
 
 @Entity("products")
 @Index(["name"]) // For search performance
@@ -73,6 +76,12 @@ export class Product implements IProduct {
     @ManyToMany(() => Order, (order: Order) => order.products)
     orders?: Order[];
 
+    // for SUPABASE FLUTTER ORDERS eASY MOVE to NEON TECH ORDERS 
+    @ManyToMany(
+    () => BharatPeOrder,
+    (order: BharatPeOrder) => order.products
+    )
+    bharatPeOrders?: BharatPeOrder[];
     // --- NEW RELATIONS FOR INVENTORY TRACKING ---
 
     // 1-to-Many: Multiple Product Barcodes (UPC/SKU) per Product

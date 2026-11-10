@@ -4,3 +4,4 @@ export { UserRepository } from "./user.repository.js";
 export { CategoryRepository } from "./category.repository.js";
 export { ProductRepository } from "./product.repository.js";
 export { OrderRepository } from "./order.repository.js";
+export { NeonOrderRepository } from "./neon-order.repository.js";

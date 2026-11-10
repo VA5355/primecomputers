@@ -24,6 +24,7 @@
   "license": "ISC",
   "dependencies": {
     "@getbrevo/brevo": "^3.0.1",
+    "@supabase/supabase-js": "^2.119.0",
     "axios": "^1.12.2",
     "bcrypt": "^5.1.0",
     "braintree": "^3.12.0",

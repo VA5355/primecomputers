@@ -10,6 +10,7 @@ import axios from "axios";
 import { AxiosError } from "axios";
 //import { emailService } from "./email.service.js";
 import { EmailService } from "./email.service.js";
+import { CreateGatewayPaymentRequest, GatewayPaymentResult, GatewayPaymentStatus, GatewayStatusResult } from "../types/payment.types.js";
 
 
  
@@ -66,6 +67,125 @@ interface OrderDetails {
 
     buyer: OrderBuyer;
 }
+// IMPORTED from the payment.types.ts 
+/* 
+export interface CreateGatewayPaymentRequest {
+    neonOrderId: string;
+    amount: number;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+}
+export interface GatewayPaymentResult {
+    gatewayOrderId: string;
+    clientTxnId: string;
+    status: "PENDING" | "FAILED";
+    qrCode: string | null;
+    paymentUrl: string | null;
+    expiresAt: Date | null;
+}
+*/
+
+interface VyaparCreateResponse {
+    status: boolean;
+    msg?: string;
+    message?: string;
+
+    data?: {
+        order_id: string;
+        client_txn_id: string;
+        amount: number;
+        currency?: string;
+        status?: string;
+
+        payment_url?: string;
+        qr_code?: string;
+        upi_string?: string;
+        expires_at?: string;
+    };
+}
+
+interface VyaparStatusResponse {
+    status?: boolean;
+    msg?: string;
+    message?: string;
+
+    data?: {
+        order_id?: string;
+        client_txn_id?: string;
+        amount?: number;
+        currency?: string;
+        status?: string;
+        payment_status?: string;
+        order_status?: string;
+        paid_at?: string;
+    };
+}
+  async function  createPayment(
+        request: CreateGatewayPaymentRequest
+    ): Promise<GatewayPaymentResult> {
+
+        // 1. Generate or receive a unique transaction reference.
+        // 2. Call the existing BharatPe/Vyapaar create-payment API.
+        // 3. Validate the gateway response.
+        // 4. Extract QR code/payment URL.
+        // 5. Return normalized payment details.
+
+        throw new Error("Implement using existing gateway API contract");
+    }
+
+    async function checkPaymentStatus(
+        clientTxnId: string,
+        gatewayOrderId: string
+    ) {
+
+        // Call the actual Vyapaar status-check API.
+        // Normalize the returned status.
+        // Do not treat an unrecognized response as SUCCESS.
+
+        /*
+
+        These are method contracts, not replacement implementations. We need your existing bharatpe.service.ts and its
+         actual gateway request/response format before writing the real API calls. I do not want to invent gateway parameters 
+         or give you code that generates an invalid QR.
+        What exactly should be returned to Flutter?
+        For example, the Node.js API could return:
+        {
+        "success": true,
+        "message": "Payment request created",
+        "data": {
+            "supabaseOrderId": "SUPABASE-ORDER-UUID",
+            "neonOrderId": "NEON-ORDER-UUID",
+            "paymentStatus": "PENDING",
+            "gateway": "BHARATPE",
+            "qrCode": "GATEWAY_RETURNED_QR_DATA",
+            "paymentUrl": null,
+            "amount": 2499,
+            "currency": "INR",
+            "expiresAt": "2026-11-09T06:00:00.000Z"
+        }
+        }
+        The qrCode field must contain the actual QR data or image returned by your gateway, in the format its API specifies.
+         It might be a UPI string, a hosted image URL, or a Base64 image. Flutter should render it according to that format.
+        Do not generate a new, unrelated UPI QR code from the amount and merchant UPI ID. It must represent the gateway payment
+         request so that the payment can be reconciled against the correct transaction.
+        2.4 repositories/bharatpe.repository.ts
+
+        */
+
+        throw new Error("Implement using existing gateway API contract");
+
+
+
+
+    }
+
+function checktoexist() {
+   //  checkPaymentStatus('dfrbfgb','aoiaoagb');
+
+}
+  
+
 export function getEmailImageUrl(
   originalUrl: string  | null | undefined,
   width = 300,
@@ -347,6 +467,9 @@ export class BharatPeService {
     private emService: EmailService;
     private logger: Logger;
 
+        private readonly baseUrl: string;
+    private readonly apiKey: string;
+
     constructor() {
         this.bharatPeOrderRepository = new BharatPeRepository();
         this.productRepository = new ProductRepository();
@@ -354,6 +477,298 @@ export class BharatPeService {
         this.bharatPeClient = new BharatPeClient();
         this.emService = new EmailService();
         this.logger = new Logger('BharatPeService');
+         this.baseUrl = (
+            process.env.VYAPARGATEWAY_BASE_URL ??
+            "https://vyapargateway.com"
+        ).replace(/\/+$/, "");
+
+        const apiKey = process.env.VYAPARGATEWAY_API_KEY;
+
+        if (!apiKey) {
+            throw new Error(
+                "VYAPARGATEWAY_API_KEY is missing"
+            );
+        }
+
+        this.apiKey = apiKey;
+        
+    }
+      private get headers(): HeadersInit {
+        return {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-API-Key": this.apiKey
+        };
+    }
+     private paiseToRupees(amountPaise: number): string {
+
+        if (
+            !Number.isSafeInteger(amountPaise) ||
+            amountPaise <= 0
+        ) {
+            throw new Error("Invalid payment amount");
+        }
+
+        const rupees = Math.floor(amountPaise / 100);
+        const paise = amountPaise % 100;
+
+        return `${rupees}.${String(paise).padStart(2, "0")}`;
+    }
+
+    private normalizeStatus(value?: string): GatewayPaymentStatus {
+
+        const status = String(value ?? "")
+            .trim()
+            .toUpperCase();
+
+        switch (status) {
+            case "SUCCESS":
+            case "PAID":
+            case "COMPLETED":
+            case "TXN_SUCCESS":
+                return "SUCCESS";
+
+            case "FAILED":
+            case "FAILURE":
+            case "TXN_FAILURE":
+                return "FAILED";
+
+            case "EXPIRED":
+                return "EXPIRED";
+
+            case "CANCELLED":
+            case "CANCELED":
+                return "CANCELLED";
+
+            case "PENDING":
+            case "PROCESSING":
+            case "INITIATED":
+                return "PENDING";
+
+            default:
+                return "UNKNOWN";
+        }
+    }
+ /**
+     * Create a dynamic UPI payment order.
+     *
+     * Called only after the Neon order has been saved
+     * and the amount has been calculated from trusted data.
+     */
+    async createPayment(
+        request: CreateGatewayPaymentRequest
+    ): Promise<GatewayPaymentResult> {
+
+        if (!request.clientTxnId) {
+            throw new Error("clientTxnId is required");
+        }
+
+        const amount = this.paiseToRupees(
+            request.amountPaise
+        );
+
+        const url = `${this.baseUrl}/api/v1/create_order`;
+
+        const body = {
+            client_txn_id: request.clientTxnId,
+
+            amount,
+
+            p_info: request.description,
+
+            customer_name: request.customer?.name,
+            customer_email: request.customer?.email,
+            customer_mobile: request.customer?.mobile,
+
+            redirect_url: request.redirectUrl,
+            callback_url: request.callbackUrl
+        };
+
+        let response: Response;
+
+        try {
+
+            response = await fetch(url, {
+                method: "POST",
+                headers: this.headers,
+                body: JSON.stringify(body),
+                signal: AbortSignal.timeout(15000)
+            });
+
+        } catch (error) {
+
+            // Network timeout is an UNKNOWN gateway outcome.
+            // Do not generate a new clientTxnId on retry.
+            throw new Error(
+                `Gateway create request failed: ${
+                    error instanceof Error
+                        ? error.message
+                        : "Unknown network error"
+                }`
+            );
+        }
+
+        const payload = await response.json() as VyaparCreateResponse;
+
+        if (!response.ok) {
+            throw new Error(
+                `Gateway HTTP error ${response.status}: ${
+                    payload.msg ?? payload.message ?? "Payment creation failed"
+                }`
+            );
+        }
+
+        if (payload.status !== true || !payload.data) {
+            throw new Error(
+                payload.msg ??
+                payload.message ??
+                "Gateway rejected payment creation"
+            );
+        }
+
+        const data = payload.data;
+
+        if (
+            !data.order_id ||
+            data.client_txn_id !== request.clientTxnId
+        ) {
+            throw new Error(
+                "Gateway response does not match the local transaction"
+            );
+        }
+
+        if (
+            data.amount !== undefined &&
+            Math.round(Number(data.amount) * 100) !== request.amountPaise
+        ) {
+            throw new Error(
+                "Gateway returned an unexpected payment amount"
+            );
+        }
+
+        return {
+            success: true,
+
+            gatewayOrderId: data.order_id,
+            clientTxnId: data.client_txn_id,
+
+            amount: Number(data.amount),
+            currency: "INR",
+
+            paymentUrl: data.payment_url,
+            qrCode: data.qr_code,
+            upiString: data.upi_string,
+
+            expiresAt: data.expires_at
+                ? new Date(data.expires_at)
+                : undefined,
+
+            rawResponse: payload
+        };
+    }
+       /**
+     * Verify payment status with VyaparGateway.
+     *
+     * This method must be called from the backend,
+     * never directly from Flutter.
+     */
+    async checkPaymentStatus(
+        clientTxnId: string,
+        gatewayOrderId: string
+    ): Promise<GatewayStatusResult> {
+
+        if (!clientTxnId || !gatewayOrderId) {
+            throw new Error(
+                "Both clientTxnId and gatewayOrderId are required"
+            );
+        }
+
+        const url = `${this.baseUrl}/api/v1/check_order_status`;
+
+        const body = {
+            order_id: gatewayOrderId,
+            client_txn_id: clientTxnId
+        };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(15000)
+        });
+
+        const payload = await response.json() as VyaparStatusResponse;
+
+        if (!response.ok) {
+            throw new Error(
+                `Gateway status HTTP error: ${response.status}`
+            );
+        }
+
+        if (payload.status === false) {
+            throw new Error(
+                payload.msg ??
+                payload.message ??
+                "Unable to verify payment status"
+            );
+        }
+
+        const data = payload.data;
+
+        if (!data) {
+            throw new Error(
+                "Gateway returned an empty payment status response"
+            );
+        }
+
+        if (
+            data.order_id &&
+            data.order_id !== gatewayOrderId
+        ) {
+            throw new Error(
+                "Gateway order ID does not match"
+            );
+        }
+
+        if (
+            data.client_txn_id &&
+            data.client_txn_id !== clientTxnId
+        ) {
+            throw new Error(
+                "Gateway transaction ID does not match"
+            );
+        }
+
+        const rawStatus =
+            data.payment_status ??
+            data.order_status ??
+            data.status;
+
+        const normalizedStatus = this.normalizeStatus(rawStatus);
+
+        return {
+            success: normalizedStatus === "SUCCESS",
+
+            gatewayOrderId:
+                data.order_id ?? gatewayOrderId,
+
+            clientTxnId:
+                data.client_txn_id ?? clientTxnId,
+
+            status: normalizedStatus,
+
+            amount: data.amount !== undefined
+                ? Number(data.amount)
+                : undefined,
+
+            currency: data.currency,
+
+            paidAt: data.paid_at
+                ? new Date(data.paid_at)
+                : undefined,
+
+            rawResponse: payload
+        };
     }
 
     async createBharatPeOrder(name: string,payload:any, cart: any[], paymethodNonce: string, userId: string): Promise<any> {
