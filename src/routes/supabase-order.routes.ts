@@ -35,7 +35,7 @@ router.post(
     controller.syncFlutterOrder.bind(controller)
 );*/
 router.post(
-    "/:supabaseOrderId/sync", (req, res, next) => {
+    "/supabase-orders/:supabaseOrderId/sync", (req, res, next) => {
         console.log("[SYNC ROUTE MATCHED]", {
             supabaseOrderId: req.params.supabaseOrderId,
             body: req.body,
