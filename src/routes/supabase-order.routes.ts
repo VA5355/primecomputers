@@ -17,6 +17,9 @@ import { Router } from "express";
 import {
     SupabaseOrderController
 } from "../controllers/supabase-order.controller.js";
+import {
+    syncFlutterOrder
+} from "../controllers/supabase-order.controller.js";
 
 import {
     requireSupabaseSignin
@@ -25,11 +28,16 @@ import {
 const router = Router();
 
 const controller = new SupabaseOrderController();
-
+/*
 router.post(
     "/:supabaseOrderId/sync",
     requireSupabaseSignin,
     controller.syncFlutterOrder.bind(controller)
+);*/
+router.post(
+    "/:supabaseOrderId/sync",
+    requireSupabaseSignin,
+    syncFlutterOrder
 );
 
 export default router;
