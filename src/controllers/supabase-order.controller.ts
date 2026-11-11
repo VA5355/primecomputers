@@ -42,6 +42,8 @@ const    service = new SupabaseOrderService();
             });
             return;
              }
+             console.log("[SUPABASE ADMIN] Starting order lookup");
+
 
                // Continue with the authoritative Supabase order lookup.
                 const { data: supabaseOrder, error } = await supabaseAdmin
@@ -51,7 +53,14 @@ const    service = new SupabaseOrderService();
                     .eq("user_id", authenticatedUser.id)
                     .maybeSingle();
 
-                if (error) {
+               if (error) {
+                    console.error("[SUPABASE ADMIN] Order lookup failed:", {
+                        code: error.code,
+                        message: error.message,
+                        details: error.details,
+                        hint: error.hint,
+                    });
+
                     throw error;
                 }
                 if (!supabaseOrder) {
@@ -61,7 +70,10 @@ const    service = new SupabaseOrderService();
                     });
                     return;
                 }
-
+                 console.log("[SUPABASE ADMIN] Order lookup successful:", {
+                    orderId: supabaseOrder?.id,
+                    userId: supabaseOrder?.user_id,
+                });   
             const authorization = req.headers.authorization;
 
             if (!authorization?.startsWith("Bearer ")) {
