@@ -1,6 +1,7 @@
 // src/services/AuthService.ts
 import { UserRepository } from "../repositories/user.repository.js";
 import { OrderRepository } from "../repositories/order.repository.js";
+import { BharatPeRepository } from "../repositories/bharatpe.repository.js";
 import { RazorPayRepository} from "../repositories/razorpay.repository.js";
 import { hashPassword, comparePassword } from "../helpers/auth.helper.js";
 import {
@@ -22,12 +23,14 @@ import { emailService } from "./email.service.js";
 export class AuthService {
     private userRepository: UserRepository;
     private orderRepository: OrderRepository;
+   private bharatPeOrderRepository: BharatPeRepository;
     private razorPayRepository: RazorPayRepository;
     private logger: Logger;
 
     constructor() {
         this.userRepository = new UserRepository();
         this.orderRepository = new OrderRepository();
+        this.bharatPeOrderRepository = new BharatPeRepository();
         this.razorPayRepository = new RazorPayRepository();
         this.logger = new Logger('AuthService');
     }
@@ -233,13 +236,57 @@ export class AuthService {
         const timer = this.logger.startTimer('Get User Orders');
 
         this.logger.debug('Fetching orders for user', { userId });
-        const orders = await this.orderRepository.findByUser(userId);
+        const [orders, bharatpeorders] = await Promise.all([
+            this.orderRepository.findByUser(userId),
+            this.bharatPeOrderRepository.findByUser(userId),
+        ]);
 
-        this.logger.info('User orders retrieved', { userId, orderCount: orders.length });
+        // Combine both order collections.
+        const combinedOrders = [
+            ...orders.map(order => ({
+                ...order,
+                orderSource:   'WEBSITE',
+            })),
+
+            ...bharatpeorders.map(order => ({
+                ...order,
+                orderSource: 'FLUTTER',
+            })),
+        ];
+
+        // Sort all orders by creation date (latest first).
+        combinedOrders.sort(
+            (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime()
+        );
+
+        this.logger.info('User orders retrieved', {
+            userId,
+            regularOrderCount: orders.length,
+            bharatPeOrderCount: bharatpeorders.length,
+            totalOrderCount: combinedOrders.length,
+        });
+
         timer();
-        this.logger.methodExit('getUserOrders', { userId, count: orders.length });
+     
 
-        return orders;
+        this.logger.methodExit('getUserOrders', {
+            userId,
+            count: combinedOrders.length,
+        });
+
+        return combinedOrders;
+        // const orders = await this.orderRepository.findByUser(userId);
+        // const baratperorders = await this.bharatPeOrderRepository.findByUser(userId);
+
+        //  this.orderRepository.findById
+
+        // this.logger.info('User orders retrieved', { userId, orderCount: orders.length });
+        // timer();
+        // this.logger.methodExit('getUserOrders', { userId, count: orders.length });
+
+        // return orders;
     }
         // Business Logic: Get User Razor Pay Orders
     async getUserRazorOrders(userId: string) {
