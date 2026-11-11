@@ -1,5 +1,5 @@
 import { In } from "typeorm";
-
+import { randomUUID } from "node:crypto";
 import { AppDataSource } from "../database/data-source.js";
 
 import { BharatPeOrder } from "../entities/bharatpeorder.entity.js";
@@ -105,7 +105,9 @@ export class NeonOrderRepository {
         ];
 
         try {
-
+                const clientTxnId = `PCN_${randomUUID()
+                            .replace(/-/g, "")
+                            .toUpperCase()}`;
             return await AppDataSource.transaction(
                 async manager => {
 
@@ -121,6 +123,28 @@ export class NeonOrderRepository {
                     );
 
                     if (existingOrder) {
+
+                           if (!existingOrder.clientTxnId) {
+
+                                existingOrder.clientTxnId = `PCN_${randomUUID()
+                                    .replace(/-/g, "")
+                                    .toUpperCase()}`;
+
+                                const repairedOrder = await manager.save(
+                                    existingOrder
+                                );
+
+                                console.log("[NEON ORDER] Existing order repaired:", {
+                                    neonOrderId: repairedOrder?.id,
+                                    clientTxnId: repairedOrder.clientTxnId
+                                });
+                                      
+                                return {
+                                    order: repairedOrder,
+                                    created: false
+                                };
+                            }
+ 
                         return {
                             order: existingOrder,
                             created: false
@@ -176,6 +200,8 @@ export class NeonOrderRepository {
 
                             supabaseOrderId: data.supabaseOrderId,
                             supabaseUserId: data.supabaseUserId,
+                             // Generate and persist the payment transaction reference.
+                             clientTxnId,
 
                             amountPaise: String(amountPaise),
                             currency: "INR",
