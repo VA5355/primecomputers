@@ -18,7 +18,7 @@ const controller = new PhonePeController();
 );*/
 
 router.post(
-    "/supabase-orders/:neonOrderId/payment", (req, res, next) => {
+    "/:neonOrderId/payment", (req, res, next) => {
         console.log("[NEON ORDER PAYMENT ROUTE MATCHED]", {
             neonOrderId: req.params.neonOrderId,
             body: req.body,

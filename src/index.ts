@@ -229,7 +229,7 @@ app.use('/api', bharatPeRoutes);
 app.use('/api', supabaseOrderRoutes );
  
 app.use(
-    "/api/supabase-orders",
+    "/api/neonpay-orders",
     paymentRoutes
 ); 
 
