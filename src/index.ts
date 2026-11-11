@@ -9,7 +9,7 @@ import authRoutes from "./routes/auth.router.js";
 import categoryRoutes from "./routes/category.router.js";
 import razorPayRoutes from "./routes/razorpay.router.js";
 import bharatPeRoutes from "./routes/bharatpe.router.js";
-import phonepeRoutes from "./routes/payment.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
 import supabaseOrderRoutes from "./routes/supabase-order.routes.js";
 
 import productRoutes from "./routes/product.router.js";
@@ -227,11 +227,11 @@ app.use('/api', bharatPeRoutes);
 // NEW FLUTTER ORDER ENDPOINT POST https://primebackend-sz0b.onrender.com/api/supabase-orders/{SUPABASE_ORDER_ID}/sync
 
 app.use('/api', supabaseOrderRoutes );
-/*
+ 
 app.use(
     "/api/supabase-orders",
-    phonepeRoutes
-);*/
+    paymentRoutes
+); 
 
 app.use('/api', trendingRoutes);
 app.use('/api', recommendationRoutes);
