@@ -227,11 +227,11 @@ app.use('/api', bharatPeRoutes);
 // NEW FLUTTER ORDER ENDPOINT POST https://primebackend-sz0b.onrender.com/api/supabase-orders/{SUPABASE_ORDER_ID}/sync
 
 app.use('/api', supabaseOrderRoutes );
-
+/*
 app.use(
     "/api/supabase-orders",
     phonepeRoutes
-);
+);*/
 
 app.use('/api', trendingRoutes);
 app.use('/api', recommendationRoutes);
