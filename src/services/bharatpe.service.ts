@@ -560,6 +560,7 @@ export class BharatPeService {
         request: CreateGatewayPaymentRequest
     ): Promise<GatewayPaymentResult> {
 
+         
         if (!request.clientTxnId) {
             throw new Error("clientTxnId is required");
         }
@@ -588,7 +589,11 @@ export class BharatPeService {
         let response: Response;
 
         try {
-
+              console.log("[BHARATPE] Initiating gateway request:", {
+                method: "POST",
+                hostname: new URL(url).hostname,
+                timestamp: new Date().toISOString(), requestbody: JSON.stringify(body)
+            });
             response = await fetch(url, {
                 method: "POST",
                 headers: this.headers,
@@ -596,8 +601,22 @@ export class BharatPeService {
                 signal: AbortSignal.timeout(15000)
             });
 
-        } catch (error) {
-
+        } catch (error :any) {
+                  console.error("[BHARATPE] Gateway network failure:", {
+                    name: error?.name,
+                    message: error?.message,
+                    cause: error?.cause
+                        ? {
+                            name: error.cause.name,
+                            message: error.cause.message,
+                            code: error.cause.code,
+                            errno: error.cause.errno,
+                            syscall: error.cause.syscall,
+                            hostname: error.cause.hostname
+                        }
+                        : null,
+                    stack: error?.stack
+                });
             // Network timeout is an UNKNOWN gateway outcome.
             // Do not generate a new clientTxnId on retry.
             throw new Error(
