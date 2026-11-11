@@ -65,7 +65,18 @@ export class SupabaseOrderService {
             .select("*")
             .eq("order_id", order.id);
 
-        if (itemsError || !items || items.length === 0) {
+        if (itemsError) {
+            console.error("[ORDER ITEMS] Supabase query failed:", {
+                code: itemsError.code,
+                message: itemsError.message,
+                details: itemsError.details,
+            });
+
+            throw itemsError;
+        }
+        console.log("[ORDER ITEMS] Retrieved:", items?.length ?? 0);
+        if (!items || items.length === 0) {
+            console.log("[ORDER ITEMS]  ORDER_ITEMS_NOT_FOUND " );
             throw new Error("ORDER_ITEMS_NOT_FOUND");
         }
 
