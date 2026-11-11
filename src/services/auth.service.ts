@@ -262,7 +262,8 @@ export class AuthService {
         const timer = this.logger.startTimer('Get All Orders');
 
         this.logger.debug('Fetching all orders with relations');
-        const orders = await this.orderRepository.findAllWithRelations();
+      //  const orders = await this.orderRepository.findAllWithRelations();
+        const orders = await this.orderRepository.findRecentOrdersFlutter();
 
         this.logger.info('All orders retrieved', { orderCount: orders.length });
         timer();

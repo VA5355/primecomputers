@@ -60,7 +60,16 @@ export class OrderRepository extends BaseRepository<Order> {
             .limit(limit)
             .getMany();
     }
-
+      // Recent orders for admin dashboard
+    async findRecentOrdersFlutter(limit: number = 10): Promise<Order[]> {
+        return this.repository
+            .createQueryBuilder("order")
+            .leftJoinAndSelect("order.products", "products")
+           // .leftJoinAndSelect("order.buyer", "buyer")
+            .orderBy("order.createdAt", "DESC")
+            .limit(limit)
+            .getMany();
+    }
     // Always include products and buyer (matches Mongoose populate)
     async findAllWithRelations(): Promise<Order[]> {
         return this.find({
