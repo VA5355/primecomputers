@@ -56,6 +56,9 @@ export class Product implements IProduct {
     @Column({ type: "varchar", nullable: true })
     photoPath?: string;
 
+    @Column("text", { array: true, default: () => "'{}'" })
+    photos: string[];
+
     @Column({ type: "varchar", nullable: true })
     photoContentType?: string;
 

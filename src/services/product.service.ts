@@ -5,7 +5,7 @@ import { OrderRepository } from "../repositories/order.repository.js";
 import { UserRepository } from "../repositories/user.repository.js";
 import { ProductItemRepository } from "../repositories/productitem.repository.js";
 import { AppDataSource } from "../database/data-source.js";
-import { CloudinaryWorkerService } from "../workers/cloudinaryWorker.js";
+import { CloudinaryJobData, CloudinaryJobDataArray, CloudinaryWorkerService } from "../workers/cloudinaryWorker.js";
 import { CreateProductDto } from "../types/index.js";
 import slugify from "slugify";
 import fs from "fs";
@@ -151,13 +151,42 @@ export class ProductService {
         });
 
         // Enqueue background upload workers for all saved photo paths
+        let cnt =1;
+        let tempCloudinaryJobData :CloudinaryJobData =  {  productId:'',
+                localRelativePath: '',
+                slug: '',
+                picNumber:''  } ;
+        let cloundinaryJobArray :CloudinaryJobDataArray = {
+               // productPhotos: [tempCloudinaryJobData],
+                productPhotos: [],
+                };
+        // = [ {productPhotos : [tempCloudinaryJobData] } ];
+
         for (const photoPath of savedPhotoPaths) {
-            workerService.enqueueUpload({
+            const picNum  = 'pic'+cnt;
+            const cloudinaryJobData :CloudinaryJobData = {
                 productId: product.id,
                 localRelativePath: photoPath,
                 slug: product.slug,
-            });
+                picNumber:picNum 
+            }
+
+            // workerService.enqueueUpload({
+            //     productId: product.id,
+            //     localRelativePath: photoPath,
+            //     slug: product.slug,
+            //     picNumber:picNum 
+            // });
+
+            cnt+=1;
+            cloundinaryJobArray.productPhotos.push(cloudinaryJobData);
         }
+         let printJobArray = JSON.stringify(cloundinaryJobArray);
+
+         this.logger.info('Product with  multiple photos', cloundinaryJobArray);
+        console.log('Product with  multiple photos', printJobArray);
+          let productUrls =     await   workerService.enqueueUploadArray(cloundinaryJobArray);
+             console.log('Product with actual multiple photos', productUrls);
 
         this.logger.info('Product created with serial items and multiple photos', { 
             productId: product.id, 
