@@ -7,6 +7,7 @@ import { CreateProductDto, OrderStatus } from "../types/index.js";
 import { Logger } from "../utils/logger.js";
 // 1. Import the built-in Node.js path module here
 import path from "path";
+import fs from "fs";
 import { isBooleanObject } from "util/types";
 // Dependency Injection: Single service instance
 const productService = new ProductService();
@@ -33,6 +34,21 @@ interface ProductUploadFields {
     quantity?: string | string[];
     shipping?: string | string[];
 }
+// 1. Define a compatibility type for different Formidable versions.
+
+interface FormidableFileCompat {
+    filepath?: string;
+    originalFilename?: string | null;
+    mimetype?: string | null;
+
+    // Older Formidable properties.
+    path?: string;
+    name?: string | null;
+    type?: string | null;
+
+    size: number;
+}
+
 /*
 export const create = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('create', {
@@ -179,7 +195,38 @@ export const create = async (
     const timer = logger.startTimer('Create Product');
 
     try {
+        // TEMPORARY DIAGNOSTICS: Inspect Formidable's actual file structure.
 
+            const rawFiles = (req as any).files || {};
+
+            logger.info('FORMIDABLE RAW FILE DIAGNOSTICS', {
+                fileKeys: Object.keys(rawFiles),
+
+                photoValueIsArray: Array.isArray(rawFiles.photo),
+
+                photoValueType: typeof rawFiles.photo,
+
+                photoCount: Array.isArray(rawFiles.photo)
+                    ? rawFiles.photo.length
+                    : rawFiles.photo ? 1 : 0,
+
+                files: Object.entries(rawFiles).map(([fieldName, value]) => {
+
+                    const fileList = Array.isArray(value) ? value : [value];
+
+                    return {
+                        fieldName,
+                        count: fileList.length,
+
+                        details: fileList.map((file: any) => ({
+                            originalFilename: file?.originalFilename,
+                            filepath: file?.filepath,
+                            mimetype: file?.mimetype,
+                            size: file?.size
+                        }))
+                    };
+                })
+            });
         logger.debug('Creating product', {
             name,
             price,
@@ -191,46 +238,94 @@ export const create = async (
          const   shipping_bool = isBooleanObject(shipping);
          //, category, quantity, shipping } = req.fields as any;
         // 1. Normalize uploaded photos into an array.
-        const uploadedPhoto = uploadRequest.files?.photo;
+        const uploadedPhoto = rawFiles.photo;
 
-        const photos: ParsedFormidableFile[] = !uploadedPhoto
-            ? []
-            : Array.isArray(uploadedPhoto)
-                ? uploadedPhoto
-                : [uploadedPhoto];
+           const photos: FormidableFileCompat[] = !uploadedPhoto
+                ? []
+                : (Array.isArray(uploadedPhoto)
+                    ? uploadedPhoto
+                    : [uploadedPhoto]
+                ) as FormidableFileCompat[];
 
-        // 2. Log the files received by Formidable.
-        logger.info('Product multipart upload received', {
-            productName: name,
-            photoCount: photos.length,
+            // 3. Inspect the actual runtime properties.
+            // This is important for identifying your installed Formidable version.
 
-            photos: photos.map(file => ({
-                filename: file.originalFilename,
-                filepath: file.filepath,
-                mimetype: file.mimetype,
-                size: file.size
-            }))
-        });
+            logger.info('FORMIDABLE RUNTIME FILE STRUCTURE', {
+                photoCount: photos.length,
 
-        // 3. Convert Formidable files into ProductPhoto objects.
-        const productPhotos: ProductPhoto[] = [];
+                files: photos.map(file => ({
+                    availableProperties: Object.keys(file),
 
-        for (const file of photos) {
+                    filepath: file.filepath,
+                    path: file.path,
 
-            if (!file.filepath) {
-                logger.warn('Skipping uploaded file without filepath');
-                continue;
+                    originalFilename: file.originalFilename,
+                    name: file.name,
+
+                    mimetype: file.mimetype,
+                    type: file.type,
+
+                    size: file.size
+                }))
+            });
+
+            // 4. Convert Formidable files into ProductPhoto objects.
+
+            const productPhotos: ProductPhoto[] = [];
+
+            for (const file of photos) {
+                // Support both newer and older Formidable property names.
+                const actualFilePath = file.filepath || file.path;
+                const originalFilename =  file.originalFilename || file.name;
+                const mimeType =     file.mimetype || file.type;
+                if (!actualFilePath) {
+                    logger.error('Uploaded file has no usable filepath', undefined, {availableProperties: Object.keys(file), originalFilename, size: file.size });
+                    continue;
+                }
+                // Verify that the uploaded temporary file actually exists.
+                if (!fs.existsSync(actualFilePath)) {
+                    logger.error('Uploaded temporary file does not exist', undefined, { actualFilePath, originalFilename  });
+                    continue;
+                }
+                const filename = path.basename(actualFilePath);
+                productPhotos.push({
+                    path: `/uploads/products/${filename}`,
+                    size: file.size,
+                    type: mimeType || 'application/octet-stream',
+                    name: originalFilename || filename
+                });
+                logger.info('Product image successfully normalized', {  filename, actualFilePath,  size: file.size,  mimeType  });
             }
 
-            const filename = path.basename(file.filepath);
+            // 5. Final diagnostic before calling ProductService.
+           logger.info('PRODUCT PHOTOS BEFORE SERVICE', {   count: productPhotos.length, photos: productPhotos     });
 
-            productPhotos.push({
-                path: `/uploads/products/${filename}`,
-                size: file.size,
-                type: file.mimetype ?? 'application/octet-stream',
-                name: file.originalFilename ?? filename
-            });
-        }
+        // 2. Log the files received by Formidable.
+        logger.info('Product multipart upload received', { productName: name, photoCount: photos.length,photos: photos.map(file => ({
+                filename: file.originalFilename,filepath: file.filepath, mimetype: file.mimetype,size: file.size  }))
+        });
+        // 3. Convert Formidable files into ProductPhoto objects.
+        //  const productPhotos: ProductPhoto[] = [];
+        // for (const file of photos) {
+        //          logger.info('Checking uploaded temporary file', {
+        //             filepath: file.filepath,
+        //             exists: fs.existsSync(file.filepath),
+        //             size: file.size
+        //         });
+        //     if (!file.filepath) {
+        //         logger.warn('Skipping uploaded file without filepath');
+        //         continue;
+        //     }
+
+        //     const filename = path.basename(file.filepath);
+
+        //     productPhotos.push({
+        //         path: `/uploads/products/${filename}`,
+        //         size: file.size,
+        //         type: file.mimetype ?? 'application/octet-stream',
+        //         name: file.originalFilename ?? filename
+        //     });
+        // }
 
         logger.debug('Photos processed in controller', {
             count: productPhotos.length
