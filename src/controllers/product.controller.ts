@@ -3,17 +3,37 @@ import { Request, Response } from "express";
 import { ProductService, ProductPhoto } from "../services/product.service";
 import { OrderRepository } from "../repositories/order.repository.js";
 import { CloudinaryWorkerService } from "../workers/cloudinaryWorker.js";
-import { OrderStatus } from "../types/index.js";
+import { CreateProductDto, OrderStatus } from "../types/index.js";
 import { Logger } from "../utils/logger.js";
 // 1. Import the built-in Node.js path module here
 import path from "path";
+import { isBooleanObject } from "util/types";
 // Dependency Injection: Single service instance
 const productService = new ProductService();
 const orderRepository = new OrderRepository();
 const logger = new Logger('ProductController');
 const workerService = new CloudinaryWorkerService();
 
+interface ParsedFormidableFile {
+    filepath: string;
+    originalFilename: string | null;
+    mimetype: string | null;
+    size: number;
+}
 
+interface ProductUploadFiles {
+    photo?: ParsedFormidableFile | ParsedFormidableFile[];
+}
+
+interface ProductUploadFields {
+    name?: string | string[];
+    description?: string | string[];
+    price?: string | string[];
+    category?: string | string[];
+    quantity?: string | string[];
+    shipping?: string | string[];
+}
+/*
 export const create = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('create', {
         name: (req.fields as any)?.name,
@@ -25,9 +45,36 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     try {
         const { name, description, price, category, quantity, shipping } = req.fields as any;
         const rawPhotos = (req.files as any)?.photo;
+                const fields = req.fields || req.body || {};
+
+        const productName = fields.name;
+        const description_1 = fields.description;
+        const price_1 = fields.price;
+        const quantity_1 = fields.quantity;
+        const category_1 = fields.category;
+        const uploadedPhoto = req.files?.photo;
+
+        const photos = !uploadedPhoto
+            ? []
+            : Array.isArray(uploadedPhoto)
+                ? uploadedPhoto
+                : [uploadedPhoto];
+
+        logger.info("Product multipart upload received", {
+            productName: fields.name,
+            photoCount: photos.length,
+            photos: photos.map(file => ({
+                filename: file.originalFilename || file.name,
+                filepath: file.filepath || file.path,
+                mimetype: file.mimetype || file.type,
+                size: file.size,
+            })),
+        });    
+
+
 
         logger.debug('Creating product', { name, price, category, quantity });
-    
+
         // Controller Responsibility: Normalize `photo` into an array of ProductPhoto objects
         let productPhotos: ProductPhoto[] = [];
         
@@ -91,7 +138,178 @@ export const create = async (req: Request, res: Response): Promise<void> => {
         res.status(400).json({ error: error.message });
         logger.methodExit('create', { success: false, error: error.message });
     }
+};*/
+
+export const create = async (
+    req: Request,
+    res: Response
+): Promise<void> => {
+
+    const uploadRequest = req as Request & {
+        fields?: ProductUploadFields;
+        files?: ProductUploadFiles;
+    };
+
+    const fields = uploadRequest.fields || {};
+
+    // Formidable can return a string or an array of strings.
+    const readField = (
+        value: string | string[] | undefined
+    ): string => {
+        if (Array.isArray(value)) {
+            return value[0] ?? '';
+        }
+
+        return value ?? '';
+    };
+
+    const name = readField(fields.name).trim();
+    const description = readField(fields.description);
+    const price = readField(fields.price);
+    const category = readField(fields.category);
+    const quantity = readField(fields.quantity);
+    const shipping = readField(fields.shipping);
+
+    logger.methodEntry('create', {
+        name,
+        category,
+        hasPhotos: !!uploadRequest.files?.photo
+    });
+
+    const timer = logger.startTimer('Create Product');
+
+    try {
+
+        logger.debug('Creating product', {
+            name,
+            price,
+            category,
+            quantity
+        });
+         const   price_number = parseFloat(price);
+         const   quantity_number = parseInt(quantity);
+         const   shipping_bool = isBooleanObject(shipping);
+         //, category, quantity, shipping } = req.fields as any;
+        // 1. Normalize uploaded photos into an array.
+        const uploadedPhoto = uploadRequest.files?.photo;
+
+        const photos: ParsedFormidableFile[] = !uploadedPhoto
+            ? []
+            : Array.isArray(uploadedPhoto)
+                ? uploadedPhoto
+                : [uploadedPhoto];
+
+        // 2. Log the files received by Formidable.
+        logger.info('Product multipart upload received', {
+            productName: name,
+            photoCount: photos.length,
+
+            photos: photos.map(file => ({
+                filename: file.originalFilename,
+                filepath: file.filepath,
+                mimetype: file.mimetype,
+                size: file.size
+            }))
+        });
+
+        // 3. Convert Formidable files into ProductPhoto objects.
+        const productPhotos: ProductPhoto[] = [];
+
+        for (const file of photos) {
+
+            if (!file.filepath) {
+                logger.warn('Skipping uploaded file without filepath');
+                continue;
+            }
+
+            const filename = path.basename(file.filepath);
+
+            productPhotos.push({
+                path: `/uploads/products/${filename}`,
+                size: file.size,
+                type: file.mimetype ?? 'application/octet-stream',
+                name: file.originalFilename ?? filename
+            });
+        }
+
+        logger.debug('Photos processed in controller', {
+            count: productPhotos.length
+        });
+
+        // 4. Validate product name.
+        if (!name) {
+
+            logger.warn('Product creation failed - name required');
+
+            res.status(400).json({
+                error: 'Product name is required'
+            });
+
+            return;
+        }
+
+        // 5. Delegate product creation to the existing service.
+        logger.debug('Calling product service to create', {
+            name,
+            photoCount: productPhotos.length
+        });
+        const prdDto :   CreateProductDto =  {
+                name: name,
+                description: description,
+                price: price_number,
+                quantity: quantity_number,
+                categoryId: category,
+                shipping: shipping_bool
+            }
+
+        const product = await productService.createProduct(
+            prdDto,
+            productPhotos
+        );
+
+        // 6. Success response.
+        logger.info('Product created successfully', {
+            productId: product.id,
+            name: product.name,
+            photoCount: productPhotos.length
+        });
+
+        res.status(201).json(product);
+
+        logger.methodExit('create', {
+            success: true,
+            productId: product.id
+        });
+
+    } catch (error: unknown) {
+
+        const errorMessage = error instanceof Error
+            ? error.message
+            : String(error);
+
+        logger.error('Product creation failed', error, {
+            name
+        });
+
+        if (!res.headersSent) {
+            res.status(400).json({
+                error: errorMessage
+            });
+        }
+
+        logger.methodExit('create', {
+            success: false,
+            error: errorMessage
+        });
+
+    } finally {
+
+        timer();
+
+    }
 };
+
+
 export const createFromJson = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('create', {
         name: (req.fields as any)?.name,
@@ -618,6 +836,9 @@ export const processPayment = async (req: Request, res: Response): Promise<void>
             orderId: result.order?.id,
             amount: result.transaction?.amount
         });
+
+
+        
         timer();
 
         // Controller Responsibility: Return response

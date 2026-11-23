@@ -26,6 +26,8 @@ const formidableOptions = {
     uploadDir: uploadDir,
     keepExtensions: true,
     maxFileSize: 5 * 1024 * 1024, // 5MB limit
+        // IMPORTANT: Enable multiple files with the same field name.
+    multiples: true,
 };
 
 
