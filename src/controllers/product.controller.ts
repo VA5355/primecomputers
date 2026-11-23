@@ -103,17 +103,17 @@ export const create = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-       /* OLD code 
-        if (photo) {
-            productPhoto = {
-                path: photo.path,
-                size: photo.size,
-                type: photo.type,
-                name: photo.name,
-            };
-            logger.debug('Photo uploaded', { size: photo.size, type: photo.type });
-        }
-        */
+       // OLD code 
+        //  if (photo) {
+        //      productPhoto = {
+         //         path: photo.path,
+        //          size: photo.size,
+        //          type: photo.type,
+        //          name: photo.name,
+        //      };
+        //        logger.debug('Photo uploaded', { size: photo.size, type: photo.type });
+        //  }
+       
         // Controller Responsibility: Delegate to service
         logger.debug('Calling product service to create', { name });
         const product = await productService.createProduct(
