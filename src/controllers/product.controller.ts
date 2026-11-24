@@ -49,12 +49,6 @@ interface FormidableFileCompat {
     size: number;
 }
 
-interface FormidableUploadFile {
-    filepath?: string;
-    originalFilename?: string | null;
-    mimetype?: string | null;
-    size: number;
-}
 /*
 export const create = async (req: Request, res: Response): Promise<void> => {
     logger.methodEntry('create', {
@@ -245,113 +239,63 @@ export const create = async (
          //, category, quantity, shipping } = req.fields as any;
         // 1. Normalize uploaded photos into an array.
         const uploadedPhoto = rawFiles.photo;
-            const photos: FormidableUploadFile[] = !uploadedPhoto
-                        ? []
-                        : Array.isArray(uploadedPhoto)
-                            ? uploadedPhoto
-                            : [uploadedPhoto];
-        //    const photos: FormidableFileCompat[] = !uploadedPhoto
-        //         ? []
-        //         : (Array.isArray(uploadedPhoto)
-        //             ? uploadedPhoto
-        //             : [uploadedPhoto]
-        //         ) as FormidableFileCompat[];
+
+           const photos: FormidableFileCompat[] = !uploadedPhoto
+                ? []
+                : (Array.isArray(uploadedPhoto)
+                    ? uploadedPhoto
+                    : [uploadedPhoto]
+                ) as FormidableFileCompat[];
 
             // 3. Inspect the actual runtime properties.
             // This is important for identifying your installed Formidable version.
 
-            // logger.info('FORMIDABLE RUNTIME FILE STRUCTURE', {
-            //     photoCount: photos.length,
+            logger.info('FORMIDABLE RUNTIME FILE STRUCTURE', {
+                photoCount: photos.length,
 
-            //     files: photos.map(file => ({
-            //         availableProperties: Object.keys(file),
+                files: photos.map(file => ({
+                    availableProperties: Object.keys(file),
 
-            //         filepath: file.filepath,
-            //         path: file.path,
+                    filepath: file.filepath,
+                    path: file.path,
 
-            //         originalFilename: file.originalFilename,
-            //         name: file.name,
+                    originalFilename: file.originalFilename,
+                    name: file.name,
 
-            //         mimetype: file.mimetype,
-            //         type: file.type,
+                    mimetype: file.mimetype,
+                    type: file.type,
 
-            //         size: file.size
-            //     }))
-            // });
+                    size: file.size
+                }))
+            });
 
             // 4. Convert Formidable files into ProductPhoto objects.
 
-           // IMPORTANT: Every photo gets its own original uploaded filename/path.
-                    const productPhotos: ProductPhoto[] = photos.map((file, index) => {
+            const productPhotos: ProductPhoto[] = [];
 
-                        if (!file.filepath) {
-                            throw new Error(
-                                `Uploaded image ${index + 1} has no Formidable filepath`
-                            );
-                        }
-
-                        if (!fs.existsSync(file.filepath)) {
-                            throw new Error(
-                                `Uploaded image ${index + 1} does not exist: ${file.filepath}`
-                            );
-                        }
-
-                        // Do NOT construct this filename from the product slug.
-                        const uniqueFilename = path.basename(file.filepath);
-
-                        return {
-                            path: `/uploads/products/${uniqueFilename}`,
-                            size: file.size,
-                            type: file.mimetype ?? 'application/octet-stream',
-                            name: file.originalFilename ?? uniqueFilename
-                        };
-                    });
-
-                    // Verify that the three image paths are actually different.
-                    const uniquePaths = new Set(
-                        productPhotos.map(photo => photo.path)
-                    );
-
-                    logger.info('UNIQUE PRODUCT IMAGE PATH VALIDATION', {
-                        receivedCount: photos.length,
-                        processedCount: productPhotos.length,
-                        uniquePathCount: uniquePaths.size,
-                        images: productPhotos.map((photo, index) => ({
-                            picNumber: `pic${index + 1}`,
-                            filename: photo.name,
-                            path: photo.path,
-                            size: photo.size
-                        }))
-                    });
-
-                    if (uniquePaths.size !== productPhotos.length) {
-                        throw new Error(
-                            'Duplicate uploaded image paths detected. Product creation stopped.'
-                        );
-                    }
-            // for (const file of photos) {
-            //     // Support both newer and older Formidable property names.
-            //     const actualFilePath = file.filepath || file.path;
-            //     const originalFilename =  file.originalFilename || file.name;
-            //     const mimeType =     file.mimetype || file.type;
-            //     if (!actualFilePath) {
-            //         logger.error('Uploaded file has no usable filepath', undefined, {availableProperties: Object.keys(file), originalFilename, size: file.size });
-            //         continue;
-            //     }
-            //     // Verify that the uploaded temporary file actually exists.
-            //     if (!fs.existsSync(actualFilePath)) {
-            //         logger.error('Uploaded temporary file does not exist', undefined, { actualFilePath, originalFilename  });
-            //         continue;
-            //     }
-            //     const filename = path.basename(actualFilePath);
-            //     productPhotos.push({
-            //         path: `/uploads/products/${filename}`,
-            //         size: file.size,
-            //         type: mimeType || 'application/octet-stream',
-            //         name: originalFilename || filename
-            //     });
-            //     logger.info('Product image successfully normalized', {  filename, actualFilePath,  size: file.size,  mimeType  });
-            // }
+            for (const file of photos) {
+                // Support both newer and older Formidable property names.
+                const actualFilePath = file.filepath || file.path;
+                const originalFilename =  file.originalFilename || file.name;
+                const mimeType =     file.mimetype || file.type;
+                if (!actualFilePath) {
+                    logger.error('Uploaded file has no usable filepath', undefined, {availableProperties: Object.keys(file), originalFilename, size: file.size });
+                    continue;
+                }
+                // Verify that the uploaded temporary file actually exists.
+                if (!fs.existsSync(actualFilePath)) {
+                    logger.error('Uploaded temporary file does not exist', undefined, { actualFilePath, originalFilename  });
+                    continue;
+                }
+                const filename = path.basename(actualFilePath);
+                productPhotos.push({
+                    path: `/uploads/products/${filename}`,
+                    size: file.size,
+                    type: mimeType || 'application/octet-stream',
+                    name: originalFilename || filename
+                });
+                logger.info('Product image successfully normalized', {  filename, actualFilePath,  size: file.size,  mimeType  });
+            }
 
             // 5. Final diagnostic before calling ProductService.
            logger.info('PRODUCT PHOTOS BEFORE SERVICE', {   count: productPhotos.length, photos: productPhotos     });
@@ -1049,3 +993,4 @@ export const orderStatus = async (req: Request, res: Response): Promise<void> =>
         logger.methodExit('orderStatus', { success: false, error: error.message });
     }
 };
+
