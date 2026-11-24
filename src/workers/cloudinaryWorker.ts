@@ -205,6 +205,32 @@ export class CloudinaryWorkerService {
       }
     }
   }
+      // GET the FIRST Product IMAGE url i.e. as the photoPath in the products table 
+   if(urlsByProductId.size > 0){ 
+        const [productId, urlsOnly] =   urlsByProductId.entries() ;
+        const id = productId.entries().next
+        // Returns 'productId' (inferred as string | undefined)
+          const firstProductId: string  = urlsByProductId.keys().next().value ?? "";
+          if (firstProductId !==""){ 
+              const firstSecureUrls : string []   =urlsByProductId.get(firstProductId) ?? [];
+              if(firstSecureUrls[0] !== ""){ 
+                   console.log(
+                       `[CloudinaryWorker] Updating Product ID: ${firstProductId}, photoPath : ${firstSecureUrls[0]} `
+                      );
+                   try {   
+                      // 3. Update photoPath in PostgreSQL DB using TypeORM ProductRepository
+                      await this.productRepository.update(firstProductId, { photoPath:  firstSecureUrls[0]});
+
+                   } catch (logError :any) {
+                      console.warn(`[CloudinaryWorker] Failed to Updating SecureUrls for Product ${firstProductId}:`, logError.message);
+                  }
+              }
+           
+          }
+        
+   }   
+     
+
 
   // 2. Update PostgreSQL database in batch per Product ID
   for (const [productId, urlsOnly] of urlsByProductId.entries()) {
